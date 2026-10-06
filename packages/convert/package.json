@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@adr/format": "*",
-    "docx": "^9.8.1"
+    "docx": "^9.8.1",
+    "mammoth": "^1.13.0",
+    "node-html-parser": "^9.0.4"
   }
 }

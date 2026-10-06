@@ -50,6 +50,18 @@ describe('parseCommand', () => {
     });
   });
 
+  it('parses import with an optional directory and --force', () => {
+    expect(parseCommand(['import', 'review.docx'], {}, CWD)).toEqual({ kind: 'import', input: '/home/user/project/review.docx', dir: null, force: false });
+    expect(parseCommand(['import', 'review.docx', 'docs/adr', '--force'], {}, CWD)).toEqual({
+      kind: 'import',
+      input: '/home/user/project/review.docx',
+      dir: '/home/user/project/docs/adr',
+      force: true,
+    });
+    expect(() => parseCommand(['import'], {}, CWD)).toThrow(ArgsError);
+    expect(() => parseCommand(['import', 'a.docx', 'b', 'c'], {}, CWD)).toThrow(ArgsError);
+  });
+
   it('recognises help and version', () => {
     expect(parseCommand(['--help'], {}, CWD)).toEqual({ kind: 'help' });
     expect(parseCommand(['-v'], {}, CWD)).toEqual({ kind: 'version' });

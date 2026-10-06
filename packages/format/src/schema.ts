@@ -48,6 +48,11 @@ export const AdrSchema = z.object({
   /** Front matter `date`: when the decision was last updated. */
   date: z.string().nullable(),
   deciders: z.array(z.string()),
+  /** MADR `consulted` and `informed` metadata. */
+  consulted: z.array(z.string()),
+  informed: z.array(z.string()),
+  /** Other front matter keys, as written: `[key, value]`, the value being the inline part then its continuation lines. */
+  otherMetadata: z.array(z.tuple([z.string(), z.string()])),
   context: z.string(),
   /** « Decision Drivers » section. */
   drivers: z.string(),
@@ -57,6 +62,12 @@ export const AdrSchema = z.object({
   /** Justification already written in « Decision Outcome » while the ADR is still proposed. */
   rationale: z.string().nullable(),
   decision: DecisionSchema.nullable(),
+  /** Markdown of « Decision Outcome » after its lead sentence (`### Consequences`, `### Confirmation`…). */
+  outcomeDetails: z.string(),
+  /** « More Information » section. */
+  moreInfo: z.string(),
+  /** `##` sections the app does not use, kept so that they survive an export and import. */
+  otherSections: z.array(z.object({ heading: z.string().min(1), body: z.string() })),
   language: LanguageSchema,
 });
 export type Adr = z.infer<typeof AdrSchema>;

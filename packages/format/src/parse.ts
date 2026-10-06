@@ -51,6 +51,24 @@ function frontmatterLine(layout: Layout, key: string): number {
   return (index === -1 ? layout.frontmatter.open : index) + 1;
 }
 
+/** Front matter keys read into dedicated fields; every other key is kept as written. */
+const KNOWN_KEYS = new Set(['status', 'statut', 'date', 'decision makers', 'deciders', 'decideurs', 'consulted', 'informed', 'tags', 'etiquettes', 'next review', 'prochaine revue']);
+
+/** Top-level front matter entries not read elsewhere, with their raw YAML value (single or multi-line). */
+function otherMetadata(layout: Layout): [string, string][] {
+  if (layout.frontmatter === null) return [];
+  const lines = layout.lines.slice(layout.frontmatter.open + 1, layout.frontmatter.close);
+  const entries: [string, string][] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const match = /^([^\s#:][^:]*):(.*)$/u.exec(lines[index]!);
+    if (!match || KNOWN_KEYS.has(normalizeKey(match[1]!))) continue;
+    const value = [match[2]!.trim()];
+    while (index + 1 < lines.length && /^(\s+\S|-\s)/u.test(lines[index + 1]!)) value.push(lines[++index]!);
+    entries.push([match[1]!.trim(), value.join('\n')]);
+  }
+  return entries;
+}
+
 /** Strips markdown decoration from a list item or heading used as an option title. */
 function cleanTitle(raw: string): string {
   return raw
@@ -166,10 +184,14 @@ export function parseMadr(content: string, fileName: string): ParseResult {
   const values = readFrontmatter(layout, issues);
 
   const sections = new Map<SectionKind, Section>();
+  const otherSections: Adr['otherSections'] = [];
   let language: Language | null = null;
   for (const section of layout.sections) {
     const known = sectionOf(section.heading);
-    if (!known || sections.has(known.kind)) continue;
+    if (!known || sections.has(known.kind)) {
+      otherSections.push({ heading: section.heading, body: textOf(layout.lines, section.line + 1, section.end) });
+      continue;
+    }
     sections.set(known.kind, section);
     language ??= known.language;
   }
@@ -225,12 +247,18 @@ export function parseMadr(content: string, fileName: string): ParseResult {
     tags: list(pick(values, 'tags', 'etiquettes')),
     date,
     deciders: list(pick(values, 'decision makers', 'deciders', 'decideurs')),
+    consulted: list(values.get('consulted')),
+    informed: list(values.get('informed')),
+    otherMetadata: otherMetadata(layout),
     context: sectionText('context'),
     drivers: sectionText('drivers'),
     propositions,
     recommended: reading.status === 'à décider' ? outcome.chosen : [],
     rationale: reading.status === 'à décider' ? outcome.comment : null,
     decision,
+    outcomeDetails: outcomeSection ? textOf(layout.lines, leadRange(outcomeSection).end, outcomeSection.end) : '',
+    moreInfo: sectionText('moreInfo'),
+    otherSections,
     language: language ?? 'en',
   };
   return { adr, issues };

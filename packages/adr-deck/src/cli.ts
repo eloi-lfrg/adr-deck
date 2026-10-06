@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hasErrors, issueMessage, parseCollection, parseMadr, type FileIssues } from '@adr/format';
-import { exportDocx, type ExportLanguage } from '@adr/convert';
+import { hasErrors, issueMessage, parseCollection, parseMadr, sameAdrContent, type FileIssues } from '@adr/format';
+import { DocxImportError, exportDocx, importDocx, type ExportLanguage } from '@adr/convert';
 import { docxFileName, resolveDecisionsDir, startServer, Workspace } from '@adr/server';
 import { ArgsError, DEFAULT_HOST, DEFAULT_PORT, parseCommand, type ReviewOptions } from './args.ts';
 
@@ -22,6 +22,7 @@ const USAGE = `adr-deck — review MADR architecture decision records, one decis
 Usage:
   ${PROGRAM} --review [dir]          Open the review of the ADRs in the directory (default: current directory)
   ${PROGRAM} export [output.docx]    Build a .docx from the ADRs of the current directory
+  ${PROGRAM} import <file.docx> [dir] Turn a .docx exported by adr-deck back into MADR files
   ${PROGRAM} validate [path…]        Check MADR files or directories (default: current directory)
 
 ADRs are the NNNN-title.md files of the directory or, failing that, of docs/decisions, docs/adr,
@@ -32,7 +33,8 @@ Options:
   -p, --port <port>     Port to listen on (default: ${DEFAULT_PORT} or the next free one; or ADR_PORT)
       --host <host>     Address to listen on (default: ${DEFAULT_HOST}, or ADR_HOST)
       --no-open         Do not open the browser
-  -d, --dir <dir>       Starting directory for export and validate (default: current directory)
+  -d, --dir <dir>       Starting directory for export, import and validate (default: current directory)
+  -f, --force           import: overwrite ADRs whose content differs from the .docx
   -o, --output <file>   .docx file written by export
   -l, --lang <lang>     Language of the .docx labels: en, fr or es (default: en)
   -h, --help            Show this help
@@ -164,6 +166,59 @@ async function validate(paths: string[]): Promise<number> {
   return failed ? 1 : 0;
 }
 
+/**
+ * Writes the MADR files of a .docx into the decisions directory. New ADRs are created; an existing ADR whose
+ * content is unchanged is left untouched (whatever its formatting); a changed one is overwritten only with --force.
+ */
+async function importCommand(input: string, target: string | null, force: boolean): Promise<number> {
+  if ((await kindOf(input)) !== 'file') throw new ArgsError(`Not a file: ${input}`);
+  let dir = target;
+  if (dir === null) {
+    const found = await resolveDecisionsDir(process.cwd());
+    dir = (await new Workspace(found).listNames()).length > 0 ? found : join(process.cwd(), 'docs', 'decisions');
+  }
+  await mkdir(dir, { recursive: true });
+  const existing = new Map((await new Workspace(dir).readAll()).map((file) => [file.name, parseMadr(file.content, file.name).adr]));
+
+  let result: Awaited<ReturnType<typeof importDocx>>;
+  try {
+    // An existing file keeps the language of its headings; new files use the MADR template (English).
+    result = await importDocx(await readFile(input), { language: (_id, name) => existing.get(name)?.language ?? 'en' });
+  } catch (error) {
+    if (!(error instanceof DocxImportError)) throw error;
+    for (const issue of error.issues) write(process.stderr, `${basename(input)}: ${issue.location}: ${issue.message}`);
+    return 1;
+  }
+  for (const issue of result.issues) write(process.stderr, `${basename(input)}: ${issue.location}: warning  ${issue.message}`);
+
+  const counts = { created: 0, updated: 0, unchanged: 0, skipped: 0 };
+  for (const file of result.files) {
+    const parsed = parseMadr(file.content, file.name);
+    if (parsed.adr === null) {
+      printIssues([{ file: file.name, issues: parsed.issues }], dir);
+      counts.skipped++;
+      continue;
+    }
+    const before = existing.get(file.name);
+    if (before === undefined) {
+      counts.created++;
+    } else if (before !== null && sameAdrContent(before, parsed.adr)) {
+      counts.unchanged++;
+      continue;
+    } else if (!force) {
+      write(process.stderr, `${file.name}: content differs from the existing file: skipped (use --force to overwrite).`);
+      counts.skipped++;
+      continue;
+    } else {
+      counts.updated++;
+    }
+    await writeFile(join(dir, file.name), file.content, 'utf8');
+    write(process.stdout, `${before === undefined ? 'created' : 'updated'}  ${relative(process.cwd(), join(dir, file.name)) || file.name}`);
+  }
+  write(process.stdout, `${dir}: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged, ${counts.skipped} skipped`);
+  return counts.skipped > 0 ? 1 : 0;
+}
+
 async function main(argv: string[]): Promise<number> {
   const command = parseCommand(argv, process.env, process.cwd());
   switch (command.kind) {
@@ -177,6 +232,8 @@ async function main(argv: string[]): Promise<number> {
       return exportCommand(command.root, command.output, command.language);
     case 'validate':
       return validate(command.paths);
+    case 'import':
+      return importCommand(command.input, command.dir, command.force);
     case 'review':
       await review(command.options);
       return 0;

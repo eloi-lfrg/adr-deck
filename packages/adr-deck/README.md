@@ -31,11 +31,13 @@ L'application est servie sur http://127.0.0.1:8787 (ou le port libre suivant). U
 
 L'interface est en anglais, français et espagnol : elle suit la langue du navigateur et se change depuis l'en-tête. La sortie terminal est en anglais.
 
-## Exporter et valider
+## Exporter, importer et valider
 
 ```sh
 adr-deck export                     # <projet>-decisions.docx dans le dossier courant
 adr-deck export revue.docx --lang fr  # nom de sortie et langue des libellés
+adr-deck import revue.docx           # .docx exporté (éventuellement modifié dans Word) → fichiers MADR
+adr-deck import revue.docx --force   # écrase aussi les ADR modifiées
 adr-deck validate                   # code de sortie 1 si un fichier est illisible
 adr-deck validate docs/decisions/0003-cache.md
 ```

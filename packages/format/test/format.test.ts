@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   adrIdFromFileName,
   AdrSchema,
+  draftFromAdr,
+  sameAdrContent,
+  serializeMadr,
+  type Adr,
   applyDecision,
   applyOperation,
   applyUndo,
@@ -279,5 +283,78 @@ describe('parseCollection', () => {
 
   it('links the examples', () => {
     expect(parseCollection(examples).replaces).toEqual({ 'ADR-0008': ['ADR-0007'] });
+  });
+});
+
+describe('serializeMadr', () => {
+  /** What an export and import must keep. */
+  const essentials = (adr: Adr): unknown => ({
+    title: adr.title,
+    status: adr.status,
+    date: adr.date,
+    deciders: adr.deciders,
+    consulted: adr.consulted,
+    informed: adr.informed,
+    tags: adr.tags,
+    otherMetadata: adr.otherMetadata,
+    context: adr.context,
+    drivers: adr.drivers,
+    propositions: adr.propositions,
+    recommended: adr.recommended,
+    rationale: adr.rationale,
+    decision: adr.decision,
+    outcomeDetails: adr.outcomeDetails,
+    moreInfo: adr.moreInfo,
+    otherSections: adr.otherSections,
+    language: adr.language,
+  });
+
+  it.each(examples.map(({ name }) => name))('rewrites %s to an equivalent ADR', (name) => {
+    const adr = parseMadrStrict(example(name), name);
+    const { adr: again, issues } = parseMadr(serializeMadr(draftFromAdr(adr)), name);
+    expect(issues).toEqual([]);
+    expect(essentials(again!)).toEqual(essentials(adr));
+  });
+
+  it('keeps outcome subsections, more information and unknown sections', () => {
+    const source = madr(
+      'status: accepted',
+      '# T\n\n## Considered Options\n\n* A\n\n## Decision Outcome\n\nChosen option: "A".\n\n### Consequences\n\n* Good, because simple\n\n## Validation\n\nRevue en mars.\n\n## More Information\n\nVoir [la RFC](https://example.com).\n',
+    );
+    const adr = parseMadrStrict(source, '0001-t.md');
+    expect(adr.outcomeDetails).toBe('### Consequences\n\n* Good, because simple');
+    expect(adr.otherSections).toEqual([{ heading: 'Validation', body: 'Revue en mars.' }]);
+    expect(adr.moreInfo).toBe('Voir [la RFC](https://example.com).');
+    expect(essentials(parseMadrStrict(serializeMadr(draftFromAdr(adr)), '0001-t.md'))).toEqual(essentials(adr));
+  });
+
+  it('keeps the MADR consulted and informed metadata and unknown keys', () => {
+    const source = madr('status: proposed\ndecision-makers: Ann\nconsulted: Bob, Chloé\ninformed:\n  - Équipe data\njira: PLAT-12\nlinks:\n  - https://example.com', '# T\n');
+    const adr = parseMadrStrict(source, '0001-t.md');
+    expect(adr).toMatchObject({ deciders: ['Ann'], consulted: ['Bob', 'Chloé'], informed: ['Équipe data'] });
+    expect(adr.otherMetadata).toEqual([
+      ['jira', 'PLAT-12'],
+      ['links', '\n  - https://example.com'],
+    ]);
+    const text = serializeMadr(draftFromAdr(adr));
+    expect(text).toContain('decision-makers: Ann\nconsulted: Bob, Chloé\ninformed: Équipe data\njira: PLAT-12\nlinks:\n  - https://example.com\n---');
+    expect(essentials(parseMadrStrict(text, '0001-t.md'))).toEqual(essentials(adr));
+  });
+
+  it('quotes YAML values when needed', () => {
+    const draft = draftFromAdr(parseMadrStrict(example('0001-file-de-messages.md'), '0001-file-de-messages.md'));
+    const text = serializeMadr({ ...draft, deciders: ['Eloi', 'Team: platform'], tags: ['yes'] });
+    expect(text).toContain('decision-makers: Eloi, "Team: platform"');
+    expect(text).toContain('tags: ["yes"]');
+  });
+});
+
+describe('sameAdrContent', () => {
+  it('ignores formatting but not content', () => {
+    const name = '0001-file-de-messages.md';
+    const adr = parseMadrStrict(example(name), name);
+    const rewritten = parseMadrStrict(serializeMadr(draftFromAdr(adr)), name);
+    expect(sameAdrContent(adr, rewritten)).toBe(true);
+    expect(sameAdrContent(adr, { ...rewritten, title: 'Autre' })).toBe(false);
   });
 });

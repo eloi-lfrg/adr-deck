@@ -1,6 +1,6 @@
 # CLAUDE.md — adr-deck
 
-Application web locale de revue d'ADR au format **MADR** : `adr-deck --review` lance l'application sur les fichiers `NNNN-titre.md` du dossier courant (ou de `docs/decisions`, `docs/adr`…), une ADR par diapositive, une décision écrite directement dans le fichier MADR. Le README décrit le produit en détail ; ce fichier résume ce qu'il faut savoir pour travailler dans le code.
+Application web locale de revue d'ADR au format **MADR** : `adr-deck --review` lance l'application sur les fichiers `NNNN-titre.md` du dossier courant (ou de `docs/decisions`, `docs/adr`…), une ADR par diapositive, une décision écrite directement dans le fichier MADR. Le README (en anglais) décrit le produit en détail ; ce fichier résume ce qu'il faut savoir pour travailler dans le code.
 
 ## Commandes
 
@@ -12,7 +12,8 @@ npm run dev                  # serveur 127.0.0.1:8787 + front localhost:5173
 npm run check                # typecheck + tous les tests unitaires — à lancer avant de rendre la main
 npm run test:e2e:chrome      # parcours Playwright avec le Chrome installé (le Chromium Playwright peut manquer)
 npm run validate -- <fichier|dossier>
-npm run export -- [sortie.docx] [--dir <dossier>]
+npm run export -- [sortie.docx] [--dir <dossier>] [--lang <en|fr|es>]
+npm run import -- <fichier.docx> [dossier] [--force]   # .docx exporté → fichiers MADR
 npm run test:package         # build + npm pack + test du paquet adr-deck installé (--review, validate, export)
 npm run install:global       # installe adr-deck globalement depuis le tarball
 npm run docker:up            # image de production via docker compose
@@ -24,8 +25,8 @@ npm run docker:up            # image de production via docker compose
 
 | Chemin | Rôle |
 | --- | --- |
-| `packages/format` | `@adr/format` : schéma Zod (`schema.ts`), titres et statuts MADR FR/EN (`vocabulary.ts`), structure des lignes (`layout.ts`), lecture (`parse.ts`), édition ciblée `decide` / `undo` (`operations.ts`), collection d'un dossier (`collection.ts`), nommage `NNNN-titre.md` (`files.ts`), dates Europe/Paris (`dates.ts`) |
-| `packages/convert` | `@adr/convert` : export `.docx` d'une collection d'ADR (`export.ts`), libellés en/fr/es (`styles.ts`) |
+| `packages/format` | `@adr/format` : schéma Zod (`schema.ts`), titres et statuts MADR FR/EN (`vocabulary.ts`), structure des lignes (`layout.ts`), lecture (`parse.ts`), édition ciblée `decide` / `undo` (`operations.ts`), écriture d'un fichier MADR complet (`serialize.ts`), collection d'un dossier (`collection.ts`), nommage `NNNN-titre.md` (`files.ts`), dates Europe/Paris (`dates.ts`) |
+| `packages/convert` | `@adr/convert` : export `.docx` d'une collection d'ADR (`export.ts`), import inverse (`import.ts`, mammoth), libellés en/fr/es (`styles.ts`) |
 | `packages/adr-deck` | Paquet npm : CLI `adr-deck` (`src/cli.ts`, `src/args.ts` : `--review`, `export`, `validate`), regroupée par esbuild avec les `@adr/*` (`scripts/build.ts`), test du tarball (`scripts/smoke.ts`), installation globale (`scripts/install-global.ts`) |
 | `apps/server` | Hono : API (`app.ts`), recherche du dossier des ADR, écriture atomique, sauvegardes dans `~/.adr-deck/backups`, surveillance (`workspace.ts`), configuration de dev (`config.ts`) |
 | `apps/web` | Vue 3 : vues (`views/`), diaporama (`components/slideshow/`), store de la collection et file d'écriture par fichier (`stores/review.ts`), traductions (`i18n/`), composants shadcn-vue générés (`components/ui/`) |
@@ -46,12 +47,13 @@ Les paquets internes sont consommés en TypeScript source (pas de build) : impor
 - **Date de décision** posée automatiquement en Europe/Paris ; ne jamais inventer de date.
 - **Valider exige au moins une option** (contrôlé dans `applyDecision` et dans l'interface).
 - **Aucune base de données** ; le serveur refuse d'écrire un contenu en erreur (422) et vérifie la révision par fichier (`If-Match`, 409). Rien n'est écrit dans le dossier des ADR hors des fichiers eux-mêmes (sauvegardes dans `~/.adr-deck`, export `.docx` téléchargé).
+- **Aller-retour `.docx`** : `importDocx(exportDocx(adrs))` redonne les mêmes ADR (test sur chaque exemple, en/fr/es). Tout champ ajouté au modèle `Adr` doit être exporté **et** relu. Les fichiers écrits restent du MADR canonique (titres et métadonnées du modèle MADR) : la conformité MADR prime.
 - Les modifications de l'interface passent par des `DocumentOperation` rejouables (`decide`, `undo`) appliquées au texte du fichier, pour que le rejeu après conflit ou rechargement fonctionne.
 
 ## Conventions de code
 
 - TypeScript strict, pas de `any`, types explicites ; `<script setup lang="ts">` pour les composants.
-- Code, commentaires, noms et descriptions de tests **en anglais** ; fichiers `.md` **en français**.
+- Code, commentaires, noms et descriptions de tests **en anglais**. Le `README.md` est **en anglais uniquement** (pas de version française) ; les autres `.md` (CLAUDE.md, skills) restent en français.
 - **Toute sortie terminal** (CLI, serveur, scripts) et les messages d'API (`{ error, code }`) **en anglais**. Les problèmes de format ont un `code` (`packages/format/src/issues.ts`, messages en/fr/es) ; `DecisionError` aussi.
 - **Interface traduite en anglais, français et espagnol** : catalogues `apps/web/src/i18n/{en,fr,es}.ts` (l'anglais fixe la forme, un test vérifie que les trois ont les mêmes clés). Aucun texte en dur dans les composants : `const { m } = useI18n()` puis `m.section.cle` ; hors composant, `t()`. Langue auto = navigateur (`navigator.languages`), choix mémorisé dans `localStorage`. Dates via `formatDate` de `@/i18n`.
 - Pas de `console.log` ni de reste de débogage ; le serveur et la CLI écrivent via `process.stdout` / `process.stderr`.

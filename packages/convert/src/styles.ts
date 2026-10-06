@@ -30,6 +30,8 @@ export interface Labels {
   file: string;
   tags: string;
   deciders: string;
+  consulted: string;
+  informed: string;
   context: string;
   drivers: string;
   options: string;
@@ -41,6 +43,7 @@ export interface Labels {
   nextReview: string;
   replacedBy: string;
   comment: string;
+  moreInfo: string;
   description: string;
   statuses: Record<Status, string>;
 }
@@ -58,6 +61,8 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     file: 'File',
     tags: 'Tags',
     deciders: 'Decision makers',
+    consulted: 'Consulted',
+    informed: 'Informed',
     context: 'Context',
     drivers: 'Decision drivers',
     options: 'Considered options',
@@ -69,6 +74,7 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     nextReview: 'Next review',
     replacedBy: 'Superseded by',
     comment: 'Comment',
+    moreInfo: 'More information',
     description: 'Exported by adr-deck',
     statuses: { 'à décider': 'proposed', validée: 'accepted', refusée: 'rejected', reportée: 'deferred', remplacée: 'superseded', obsolète: 'deprecated' },
   },
@@ -84,6 +90,8 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     file: 'Fichier',
     tags: 'Tags',
     deciders: 'Décideurs',
+    consulted: 'Consultés',
+    informed: 'Informés',
     context: 'Contexte',
     drivers: 'Critères de décision',
     options: 'Options envisagées',
@@ -95,6 +103,7 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     nextReview: 'Prochaine revue',
     replacedBy: 'Remplacée par',
     comment: 'Commentaire',
+    moreInfo: 'Informations complémentaires',
     description: 'Exporté par adr-deck',
     statuses: { 'à décider': 'à décider', validée: 'validée', refusée: 'refusée', reportée: 'reportée', remplacée: 'remplacée', obsolète: 'obsolète' },
   },
@@ -110,6 +119,8 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     file: 'Archivo',
     tags: 'Etiquetas',
     deciders: 'Responsables de la decisión',
+    consulted: 'Consultados',
+    informed: 'Informados',
     context: 'Contexto',
     drivers: 'Criterios de decisión',
     options: 'Opciones consideradas',
@@ -121,7 +132,12 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     nextReview: 'Próxima revisión',
     replacedBy: 'Reemplazado por',
     comment: 'Comentario',
+    moreInfo: 'Más información',
     description: 'Exportado por adr-deck',
     statuses: { 'à décider': 'por decidir', validée: 'aceptado', refusée: 'rechazado', reportée: 'aplazado', remplacée: 'reemplazado', obsolète: 'obsoleto' },
   },
 };
+
+/** Word style names shared by the export and the import (code keeps its formatting through Word). */
+export const CODE_BLOCK_STYLE = 'Source Code';
+export const INLINE_CODE_STYLE = 'Inline Code';

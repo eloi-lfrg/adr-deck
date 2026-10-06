@@ -19,6 +19,8 @@ export type Command =
   | { kind: 'review'; options: ReviewOptions }
   | { kind: 'export'; root: string; output: string | null; language: ExportLanguage }
   | { kind: 'validate'; paths: string[] }
+  /** `dir`: null = the decisions directory of the current directory (see `cli.ts`). */
+  | { kind: 'import'; input: string; dir: string | null; force: boolean }
   | { kind: 'help' }
   | { kind: 'version' };
 
@@ -45,6 +47,7 @@ function parse(argv: string[]) {
         dir: { type: 'string', short: 'd' },
         output: { type: 'string', short: 'o' },
         lang: { type: 'string', short: 'l' },
+        force: { type: 'boolean', short: 'f' },
         help: { type: 'boolean', short: 'h' },
         version: { type: 'boolean', short: 'v' },
       },
@@ -67,6 +70,13 @@ export function parseCommand(argv: string[], env: NodeJS.ProcessEnv, cwd: string
     const language = values.lang ?? 'en';
     if (!isExportLanguage(language)) throw new ArgsError(`Invalid language: ${language} (expected ${EXPORT_LANGUAGES.join(', ')})`);
     return { kind: 'export', root: resolve(cwd, values.dir ?? '.'), output: output === null ? null : resolve(cwd, output), language };
+  }
+  if (subcommand === 'import') {
+    const [input, target, ...extra] = rest;
+    if (input === undefined) throw new ArgsError('Missing .docx file: adr-deck import <file.docx> [dir]');
+    if (extra.length > 0) throw new ArgsError(`Expected a .docx file and at most one directory, got: ${rest.join(' ')}`);
+    const dir = target ?? values.dir;
+    return { kind: 'import', input: resolve(cwd, input), dir: dir === undefined ? null : resolve(cwd, dir), force: values.force === true };
   }
   if (subcommand === 'validate') {
     return { kind: 'validate', paths: (rest.length > 0 ? rest : [values.dir ?? '.']).map((path) => resolve(cwd, path)) };

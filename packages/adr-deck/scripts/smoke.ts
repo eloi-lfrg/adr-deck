@@ -74,6 +74,11 @@ try {
   run(bin, ['export', 'decisions.docx'], repo);
   const docx = await readFile(join(repo, 'decisions.docx'));
   check((await readdir(repo)).includes('decisions.docx') && docx.subarray(0, 2).toString() === 'PK', 'adr-deck export → .docx');
+
+  // The export reads back: unchanged ADRs are left as they are, and a fresh directory gets every ADR.
+  check(run(bin, ['import', 'decisions.docx'], repo).includes('0 created, 0 updated, 9 unchanged, 0 skipped'), 'adr-deck import of an unchanged export');
+  check(run(bin, ['import', 'decisions.docx', 'imported'], repo).includes('9 created'), 'adr-deck import → MADR files');
+  check(run(bin, ['validate', 'imported'], repo).includes('9 readable ADRs'), 'imported MADR files are valid');
 } finally {
   await rm(root, { recursive: true, force: true });
 }

@@ -1,145 +1,146 @@
 # adr-deck
 
-Revue d'ADR (*Architecture Decision Records*) rythmée et sobre : **une ADR par diapositive, une décision en un clic**, écrite directement dans les fichiers [MADR](https://adr.github.io/madr/) de votre projet.
+A focused, well-paced review of ADRs (*Architecture Decision Records*): **one ADR per slide, one decision per click**, written straight into your project's [MADR](https://adr.github.io/madr/) files.
 
-C'est une application web **locale**, pensée pour être pilotée par une personne en partage d'écran pendant une réunion : on lance `adr-deck --review` dans un projet, le navigateur s'ouvre sur ses ADR. Aucune base de données : **les fichiers `NNNN-titre.md` sont l'unique source de vérité**.
+It is a **local** web app, designed to be driven by one person sharing their screen during a meeting: run `adr-deck --review` in a project and the browser opens on its ADRs. No database: **the `NNNN-title.md` files are the single source of truth**.
 
-## Sommaire
+## Contents
 
-- [Installation sur le poste](#installation-sur-le-poste)
-- [Utilisation](#utilisation)
-- [Langues](#langues)
-- [Raccourcis clavier](#raccourcis-clavier)
-- [Le format MADR](#le-format-madr)
-- [Créer des ADR](#créer-des-adr)
-- [Exporter en `.docx`](#exporter-en-docx)
-- [Développement](#développement)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Languages](#languages)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [The MADR format](#the-madr-format)
+- [Creating ADRs](#creating-adrs)
+- [Exporting to and importing from `.docx`](#exporting-to-and-importing-from-docx)
+- [Development](#development)
 - [Docker](#docker)
-- [Scripts npm](#scripts-npm)
+- [npm scripts](#npm-scripts)
 - [Architecture](#architecture)
 - [Design](#design)
-- [Dépannage](#dépannage)
-- [Limites connues](#limites-connues)
+- [Troubleshooting](#troubleshooting)
+- [Known limitations](#known-limitations)
 
-## Installation sur le poste
+## Installation
 
-Prérequis : Node.js ≥ 22.22 (`nvm install 22.22 && nvm use`).
+Requirement: Node.js ≥ 22.22 (`nvm install 22.22 && nvm use`).
 
 ```sh
 npm install
-npm run install:global     # construit le paquet, l'emballe et l'installe avec npm install -g
+npm run install:global     # builds the package, packs it and installs it with npm install -g
 ```
 
-La commande `adr-deck` est alors disponible partout. L'installation est une copie autonome (installée depuis le tarball) : elle ne dépend pas de ce dépôt. Pour mettre à jour, relancer `npm run install:global` ; pour désinstaller, `npm run uninstall:global`.
+The `adr-deck` command is then available everywhere. The installation is a standalone copy (installed from the tarball): it does not depend on this repository. To update, run `npm run install:global` again; to uninstall, `npm run uninstall:global`.
 
-Avec nvm, les paquets globaux sont propres à chaque version de Node : `adr-deck` est disponible tant que Node 22.22 (ou la version active lors de l'installation) est utilisé.
+With nvm, global packages belong to one Node version: `adr-deck` is available as long as Node 22.22 (or the version active at install time) is in use.
 
-## Utilisation
+## Usage
 
 ```sh
-cd ~/workspace/mon-projet
-adr-deck --review              # serveur local + ouverture du navigateur
+cd ~/workspace/my-project
+adr-deck --review              # local server + opens the browser
 ```
 
-| Commande | Rôle |
+| Command | Purpose |
 | --- | --- |
-| `adr-deck --review [dossier]` | Revue des ADR du dossier (défaut : dossier courant) |
-| `adr-deck export [sortie.docx]` | `.docx` de toutes les ADR (défaut : `<projet>-decisions.docx` dans le dossier courant ; libellés en anglais, `--lang fr` ou `--lang es` sinon) |
-| `adr-deck validate [chemin…]` | Vérifie des fichiers ou des dossiers MADR ; code de sortie 1 en cas d'erreur |
-| `adr-deck --help` / `--version` | Aide / version |
+| `adr-deck --review [dir]` | Review the ADRs of the directory (default: current directory) |
+| `adr-deck export [output.docx]` | `.docx` of every ADR (default: `<project>-decisions.docx` in the current directory; English labels, or `--lang fr` / `--lang es`) |
+| `adr-deck import <file.docx> [dir]` | Turn a `.docx` exported by adr-deck (possibly edited in Word) back into MADR files |
+| `adr-deck validate [path…]` | Check MADR files or directories; exit code 1 on error |
+| `adr-deck --help` / `--version` | Help / version |
 
-Options : `-p, --port <port>` (défaut 8787, ou le suivant libre ; `ADR_PORT`), `--host <hôte>` (défaut 127.0.0.1 ; `ADR_HOST`), `--no-open`, `-d, --dir <dossier>` (point de départ d'`export` et `validate`), `-o, --output <fichier>`, `-l, --lang <en|fr|es>` (langue des libellés du `.docx`).
+Options: `-p, --port <port>` (default 8787, or the next free one; `ADR_PORT`), `--host <host>` (default 127.0.0.1; `ADR_HOST`), `--no-open`, `-d, --dir <dir>` (starting directory for `export`, `import` and `validate`), `-o, --output <file>`, `-l, --lang <en|fr|es>` (language of the `.docx` labels), `-f, --force` (`import`: overwrite ADRs whose content changed).
 
-Toute la sortie terminal (CLI, serveur) est en anglais. `Ctrl+C` arrête le serveur immédiatement, même avec le navigateur ouvert ; un second `Ctrl+C` force la sortie.
+All terminal output (CLI, server) is in English. `Ctrl+C` stops the server immediately, even with the browser open; a second `Ctrl+C` forces the exit.
 
-### Où sont cherchées les ADR
+### Where ADRs are looked for
 
-Les ADR sont les fichiers `NNNN-titre.md` (numéro d'au moins 3 chiffres). Le premier dossier qui en contient est retenu :
+ADRs are `NNNN-title.md` files (a number of at least 3 digits). The first directory that contains some is used:
 
-1. le dossier de lancement ;
-2. `docs/decisions` (convention MADR), `docs/adr`, `doc/adr`, `docs/architecture/decisions`, `adr`, `decisions`.
+1. the launch directory;
+2. `docs/decisions` (MADR convention), `docs/adr`, `doc/adr`, `docs/architecture/decisions`, `adr`, `decisions`.
 
-Le dossier retenu est affiché au lancement et en tête de la grille. Les autres `.md` (`README.md`, `template.md`…) sont ignorés.
+The selected directory is shown at startup and at the top of the grid. Other `.md` files (`README.md`, `template.md`…) are ignored.
 
-### Parcours d'une revue
+### Review flow
 
-1. **Grille** — toutes les ADR du dossier : onglets par statut avec compteurs, recherche plein texte, filtre par tags, tri (numéro, date, statut). Un clic sur une carte ouvre le diaporama sur cette ADR. La pastille dans le coin d'une carte l'ajoute à une sélection. Les fichiers illisibles sont signalés dans un encart dépliable (fichier, ligne, message) et écartés de la revue.
-2. **Diaporama** — « Lancer la revue » (ou `R`) passe en plein écran. Pour chaque ADR : lire le contexte et les critères de décision, sélectionner une ou plusieurs options, puis **Valider**, **Refuser** ou **Reporter**, avec un commentaire et une date de prochaine revue facultatifs. La diapositive suivante arrive après 1,2 s (avance automatique désactivable) ; le fichier est enregistré en arrière-plan.
-3. **Récapitulatif** — à la fin : compteurs de la séance, décisions prises avec leurs commentaires, export `.docx`.
+1. **Grid** — every ADR of the directory: status tabs with counters, full-text search, tag filter, sorting (number, date, status). Clicking a card opens the slideshow on that ADR. The dot in the corner of a card adds it to a selection. Unreadable files are listed in a collapsible notice (file, line, message) and left out of the review.
+2. **Slideshow** — “Start the review” (or `R`) switches to full screen. For each ADR: read the context and the decision drivers, select one or more options, then **Accept**, **Reject** or **Defer**, with an optional comment and next review date. The next slide comes after 1.2 s (auto advance can be turned off); the file is saved in the background.
+3. **Summary** — at the end: session counters, decisions made with their comments, `.docx` export.
 
-### Modes du diaporama
+### Slideshow modes
 
-| Mode | Contenu | Comportement |
+| Mode | Content | Behaviour |
 | --- | --- | --- |
-| À décider | ADR `proposed` (+ `deferred`, option activée par défaut) | Diapositives éditables |
-| Décidées | ADR `accepted`, `rejected`, `superseded`, `deprecated` | Lecture seule, bouton « Modifier la décision » (`M`) |
-| Toutes | Toutes les ADR | Éditables si non tranchées |
-| Sélection | ADR cochées dans la grille, ou ADR visibles après filtre (clic sur une carte) | Idem |
+| Proposed | `proposed` ADRs (+ `deferred`, enabled by default) | Editable slides |
+| Decided | `accepted`, `rejected`, `superseded`, `deprecated` ADRs | Read only, “Edit the decision” button (`M`) |
+| All | Every ADR | Editable when not decided |
+| Selection | ADRs ticked in the grid, or ADRs visible after filtering (click on a card) | Same |
 
-La liste est figée au lancement : décider une ADR ne la fait pas disparaître du diaporama.
+The list is frozen at launch: deciding an ADR does not remove it from the slideshow.
 
-### Décisions
+### Decisions
 
-- **Valider** exige au moins une option sélectionnée (clic sur la carte ou touches `1` à `9`). Plusieurs options peuvent être retenues.
-- Une ADR `proposed` dont « Decision Outcome » nomme déjà une option (`Chosen option: "…"`) arrive avec cette option présélectionnée et sa justification dans le commentaire.
-- **Refuser** : aucune option retenue. **Reporter** : date « Prochaine revue » facultative (icône calendrier).
-- La **date** est posée automatiquement (date du jour, fuseau Europe/Paris).
-- **`Ctrl+Z`** annule la dernière décision de la séance : le fichier retrouve **exactement** son contenu d'avant.
+- **Accept** requires at least one selected option (click on the card or keys `1` to `9`). Several options can be chosen.
+- A `proposed` ADR whose “Decision Outcome” already names an option (`Chosen option: "…"`) arrives with that option preselected and its justification in the comment.
+- **Reject**: no option chosen. **Defer**: optional “Next review” date (calendar icon).
+- The **date** is set automatically (today, Europe/Paris time zone).
+- **`Ctrl+Z`** undoes the last decision of the session: the file gets back **exactly** its previous content.
 
-### ADR remplacées
+### Superseded ADRs
 
-Une ADR `superseded by ADR-0008` affiche un lien vers sa remplaçante, avec son titre :
+An ADR with `superseded by ADR-0008` shows a link to its replacement, with its title:
 
-- sur sa carte dans la grille (« remplacée par ADR-0008 ↗ ») ;
-- dans la barre du bas de sa diapositive, et avec la touche **`L`** ;
-- l'ADR remplaçante indique en retour « remplace ADR-0007 », avec un lien.
+- on its card in the grid (“superseded by ADR-0008 ↗”);
+- in the bottom bar of its slide, and with the **`L`** key;
+- the replacement shows “supersedes ADR-0007” in return, with a link.
 
-Si la remplaçante n'est pas dans la liste du diaporama en cours, elle s'ouvre en mode « Toutes ». Une ADR remplaçante absente du dossier est signalée par un avertissement.
+If the replacement is not in the current slideshow list, it opens in “All” mode. A replacement missing from the directory is reported as a warning.
 
-### Mode présentation
+### Presentation mode
 
-En diaporama, les contrôles et le curseur s'effacent quand la souris reste immobile 2 s ; ils réapparaissent au moindre mouvement ou en approchant du haut de l'écran. La revue se mène entièrement au clavier. Seul un fin trait de progression reste visible en haut.
+In the slideshow, controls and cursor fade out when the mouse rests for 2 s; they come back on the slightest movement or when nearing the top of the screen. The whole review runs from the keyboard. Only a thin progress line stays visible at the top.
 
-### Enregistrement
+### Saving
 
-L'indicateur en haut à droite affiche *Enregistrement…*, *Enregistré* ou *Erreur* (avec *Réessayer*). Une décision est écrite dans son fichier en moins d'une seconde. Si un fichier est modifié hors de l'application (éditeur, `git pull`), l'interface le recharge à chaud sans perdre les décisions en attente ; un fichier ajouté ou supprimé apparaît ou disparaît de la grille.
+The indicator at the top right shows *Saving…*, *Saved* or *Error* (with *Retry*). A decision reaches its file in less than a second. When a file is modified outside the app (editor, `git pull`), the UI hot-reloads it without losing pending decisions; an added or removed file appears in or disappears from the grid.
 
-Avant chaque écriture, la version précédente est sauvegardée (10 dernières par fichier) dans `~/.adr-deck/backups/<dossier>-<empreinte>/`, hors du dépôt.
+Before each write, the previous version is backed up (last 10 per file) in `~/.adr-deck/backups/<directory>-<hash>/`, outside the repository.
 
-## Langues
+## Languages
 
-L'interface existe en **anglais, français et espagnol**. Au premier lancement, elle suit la langue du navigateur (première langue prise en charge dans ses préférences, anglais sinon) et change d'elle-même si la langue du navigateur change.
+The UI is available in **English, French and Spanish**. By default it follows the browser language (the first supported language among its preferences, English otherwise) and switches on its own when the browser language changes.
 
-Le bouton de langue dans l'en-tête (icône 文A et code `EN` / `FR` / `ES`) permet de choisir une langue fixe ou de revenir à « Automatique ». Le choix est mémorisé dans le navigateur. La palette `Ctrl+K` propose aussi « Changer de langue ».
+The language button in the header (文A icon and `EN` / `FR` / `ES` code) lets you pick a fixed language or go back to “Automatic”. The choice is remembered in the browser. The `Ctrl+K` palette also offers “Change language”.
 
-La langue de l'interface s'applique aussi aux messages de format (encart de la grille) et aux libellés du `.docx` exporté depuis l'application. Le contenu des ADR n'est jamais traduit ; la phrase écrite dans « Decision Outcome » suit la langue des titres du fichier (anglais ou français).
+The UI language also applies to format messages (grid notice) and to the labels of the `.docx` exported from the app. ADR content is never translated; the sentence written in “Decision Outcome” follows the language of the file headings (English or French).
 
-## Raccourcis clavier
+## Keyboard shortcuts
 
-`?` affiche l'aide des raccourcis dans le diaporama.
+`?` shows the shortcuts help in the slideshow.
 
-| Touche | Action |
+| Key | Action |
 | --- | --- |
-| `←` / `→` | ADR précédente / suivante |
-| `1` à `9` | Sélectionner / désélectionner l'option P1 à P9 |
-| `V` / `X` / `P` | Valider / Refuser / Reporter |
-| `C` | Focus sur le commentaire (`Entrée` ou `Échap` pour sortir) |
-| `M` | Modifier une décision existante |
-| `L` | Aller à l'ADR qui remplace l'ADR affichée |
-| `S` | Sommaire des miniatures |
-| `G` | Retour à la grille |
-| `F` | Plein écran |
-| `Ctrl+Z` / `⌘Z` | Annuler la dernière décision de la séance |
-| `Ctrl+K` / `⌘K` | Recherche et actions |
-| `?` | Aide des raccourcis (diaporama) |
-| `Échap` | Fermer le panneau ou quitter le diaporama |
-| `R` (grille) | Lancer la revue |
-| `/` (grille) | Rechercher |
-| `E` (récapitulatif) | Exporter en `.docx` |
+| `←` / `→` | Previous / next ADR |
+| `1` to `9` | Select / unselect option P1 to P9 |
+| `V` / `X` / `P` | Accept / Reject / Defer |
+| `C` | Focus the comment (`Enter` or `Esc` to leave) |
+| `M` | Edit an existing decision |
+| `L` | Go to the ADR that supersedes the current one |
+| `S` | Thumbnail contents |
+| `G` | Back to the grid |
+| `F` | Full screen |
+| `Ctrl+Z` / `⌘Z` | Undo the last decision of the session |
+| `Ctrl+K` / `⌘K` | Search and actions |
+| `?` | Shortcuts help (slideshow) |
+| `Esc` | Close the panel or leave the slideshow |
+| `R` (grid) | Start the review |
+| `/` (grid) | Search |
+| `E` (summary) | Export to `.docx` |
 
-## Le format MADR
+## The MADR format
 
-**Un fichier = une ADR**, nommé `NNNN-titre.md` ; l'identifiant affiché vient du numéro (`0007-cache.md` → `ADR-0007`). Le modèle est dans `templates/madr.md`, des exemples couvrant tous les statuts dans `examples/decisions/`.
+**One file = one ADR**, named `NNNN-title.md`; the displayed ID comes from the number (`0007-cache.md` → `ADR-0007`). The template is in `templates/madr.md`, and examples covering every status are in `examples/decisions/`.
 
 ```markdown
 ---
@@ -149,248 +150,289 @@ decision-makers: Eloi, Marie
 tags: [backend, infra]
 ---
 
-# Choix de la file de messages
+# Message queue choice
 
 ## Context and Problem Statement
 
-Les traitements asynchrones passent aujourd'hui par des tâches cron.
+Asynchronous jobs currently run as cron tasks.
 
 ## Decision Drivers
 
-* Reprise sur erreur
+* Retry on failure
 
 ## Considered Options
 
-* PostgreSQL comme file (pg-boss)
+* PostgreSQL as a queue (pg-boss)
 * RabbitMQ
 
 ## Decision Outcome
 
-Chosen option: "PostgreSQL comme file (pg-boss)", because suffisant pour nos volumes.
+Chosen option: "PostgreSQL as a queue (pg-boss)", because it is enough for our volumes.
 
 ### Consequences
 
-* Good, because aucune infrastructure supplémentaire.
+* Good, because no extra infrastructure.
 
 ## Pros and Cons of the Options
 
-### PostgreSQL comme file (pg-boss)
+### PostgreSQL as a queue (pg-boss)
 
-Réutilise la base existante.
+Reuses the existing database.
 
-* Good, because zéro infra en plus
-* Bad, because débit limité
+* Good, because no extra infrastructure
+* Bad, because limited throughput
 
 ### RabbitMQ
 
-* Good, because débit, routage riche
+* Good, because throughput, rich routing
 ```
 
-### Lecture
+### Reading
 
-| Élément | Utilisation |
+| Element | Use |
 | --- | --- |
-| Front matter | `status`, `date`, `decision-makers` (ou `deciders`), `tags` (liste ou texte séparé par des virgules), `next-review`. Absent : ADR `proposed`. |
-| `# Titre` | Titre de la diapositive (obligatoire). |
-| `## Context and Problem Statement` | Contexte affiché. |
-| `## Decision Drivers` | Critères de décision, affichés sous le contexte. |
-| `## Considered Options` | Une option par puce → cartes P1, P2… |
-| `## Pros and Cons of the Options` | Sous-sections `### <option>` rattachées par titre : texte, `Good, because …` (pour), `Bad, because …` (contre). |
-| `## Decision Outcome` | `Chosen option(s): "A" [and "B"], because …` → options retenues et commentaire. |
+| Front matter | `status`, `date`, `decision-makers` (or MADR 3 `deciders`), `consulted`, `informed` (list or comma-separated text), plus the `tags` and `next-review` extensions. Any other key is kept as written. No front matter: `proposed` ADR. |
+| `# Title` | Slide title (required). |
+| `## Context and Problem Statement` | Displayed context. |
+| `## Decision Drivers` | Decision drivers, shown below the context. |
+| `## Considered Options` | One option per bullet → cards P1, P2… |
+| `## Pros and Cons of the Options` | `### <option>` subsections matched by title: description, `Good, because …` (pro), `Bad, because …` (con); `Neutral, because …` stays in the description. |
+| `## Decision Outcome` | Lead sentence `Chosen option: "A", because …` → chosen option and comment (several options: `Chosen options: "A" and "B"`). For a `proposed` ADR, the named option is a recommendation, preselected in the slideshow. Subsections (`### Consequences`, `### Confirmation`) are kept. |
+| `## More Information` and any other `##` section | Kept, included in the `.docx` export and read back on import. |
 
-Les titres français courants sont acceptés (`Contexte et problématique`, `Options envisagées`, `Décision`, `Avantages et inconvénients des options`, `Bon, car …` / `Mauvais, car …`). Les commentaires HTML (`<!-- … -->`) sont ignorés.
+Common French headings are accepted as well (`Contexte et problématique`, `Options envisagées`, `Décision`, `Avantages et inconvénients des options`, `Bon, car …` / `Mauvais, car …`). HTML comments (`<!-- … -->`) are ignored.
 
-### Statuts
+### MADR compliance
 
-| `status` MADR | Dans l'application | Écrit lors de |
+adr-deck reads and writes [MADR 4](https://adr.github.io/madr/) (and reads MADR 3 `deciders`). Everything it writes stays within the format:
+
+- standard metadata in the template order: `status`, `date`, `decision-makers`, `consulted`, `informed`;
+- standard section headings and sentences: `Chosen option: "…", because …`, `* Good, because …`, `* Bad, because …`;
+- `NNNN-title-with-dashes.md` file names; IDs (`ADR-0007`) come from the number.
+
+Three conventions go beyond the template, as MADR allows (its metadata is optional and its status list is open, “proposed | rejected | accepted | deprecated | … | superseded by ADR-0123”):
+
+| Extension | Why |
+| --- | --- |
+| `status: deferred` | MADR has no status for a postponed decision |
+| `next-review: YYYY-MM-DD` | Next review date of a deferred decision; removed once decided |
+| `tags: [a, b]` | Grid filters; kept as written, never invented by the app |
+
+French section headings are read for files written that way, and kept when such a file is rewritten; new files use the English MADR headings.
+
+### Statuses
+
+| MADR `status` | In the app | Written by |
 | --- | --- | --- |
-| `proposed` (ou absent, `draft`) | À décider | — |
-| `accepted` | Validée | Valider |
-| `rejected` | Refusée | Refuser |
-| `deferred` (+ `next-review`) | Reportée | Reporter |
-| `superseded by ADR-0012` | Remplacée | (saisi dans le fichier) |
-| `deprecated` | Obsolète | (saisi dans le fichier) |
+| `proposed` (or missing, `draft`) | Proposed | — |
+| `accepted` | Accepted | Accept |
+| `rejected` | Rejected | Reject |
+| `deferred` (+ `next-review`) | Deferred | Defer |
+| `superseded by ADR-0012` | Superseded | (typed in the file) |
+| `deprecated` | Deprecated | (typed in the file) |
 
-Un statut inconnu est lu comme « à décider » avec un avertissement.
+An unknown status is read as “proposed”, with a warning.
 
-### Écriture
+### Writing
 
-Une décision ne modifie **que** :
+A decision changes **only**:
 
-- les clés `status`, `date` et `next-review` du front matter (créé s'il manque ; les autres clés, l'ordre et les guillemets sont conservés) ;
-- la phrase de tête de `## Decision Outcome` (section créée avant « Pros and Cons » si elle manque) ; les sous-sections (`### Consequences`…) sont conservées. La phrase est écrite dans la langue des titres du fichier : `Chosen option: "A", because …` ou `Option retenue : « A », car …`.
+- the `status`, `date` and `next-review` keys of the front matter (created when missing; other keys, their order and their quoting are kept);
+- the lead sentence of `## Decision Outcome` (section created before “Pros and Cons” when missing); subsections (`### Consequences`…) are kept. The sentence is written in the language of the file headings: `Chosen option: "A", because …` or `Option retenue : « A », car …`.
 
-Tout le reste du fichier est conservé à l'octet près, fins de ligne CRLF comprises. Annuler une décision restaure les deux zones telles qu'elles étaient.
+The rest of the file is kept byte for byte, CRLF line endings included. Undoing a decision restores both parts as they were.
 
-### Erreurs
+### Errors
 
-`adr-deck validate` (ou `npm run validate -- <chemin>`) signale les problèmes avec leur ligne. Sont des **erreurs** (fichier écarté de la revue) : titre `#` absent, front matter YAML invalide, numéro en double. Sont des **avertissements** : statut inconnu, aucune option envisagée (validation impossible), option retenue absente des options, ADR remplaçante introuvable. Le serveur refuse d'écrire un contenu en erreur.
+`adr-deck validate` (or `npm run validate -- <path>`) reports problems with their line. **Errors** (file left out of the review): missing `#` title, invalid YAML front matter, duplicate number. **Warnings**: unknown status, no considered option (cannot be accepted), chosen option missing from the options, replacement ADR not found. The server refuses to write content with errors.
 
-## Créer des ADR
+## Creating ADRs
 
-- **À la main** : copier `templates/madr.md` en `docs/decisions/NNNN-titre.md`.
-- **Depuis n'importe quelle source** (compte rendu, notes, PDF, Word, fil de discussion) : le skill Claude Code du dépôt `adr-extract` produit des fichiers MADR validés, sans rien inventer :
+- **By hand**: copy `templates/madr.md` to `docs/decisions/NNNN-title.md`.
+- **From a `.docx` exported by adr-deck**: `adr-deck import review.docx` (see [Import](#import)).
+- **From any source** (meeting notes, PDF, Word, discussion thread): the repository's Claude Code skill `adr-extract` produces validated MADR files, without making anything up:
 
   ```text
-  /adr-extract ~/Documents/compte-rendu-comite.pdf docs/decisions
+  /adr-extract ~/Documents/committee-minutes.pdf docs/decisions
   ```
 
-## Exporter en `.docx`
+## Exporting to and importing from `.docx`
 
-Depuis la grille (icône d'export), le récapitulatif (`E`), la palette `Ctrl+K` (libellés dans la langue de l'interface), ou en ligne de commande :
+### Export
+
+From the grid (export icon), the summary (`E`), the `Ctrl+K` palette (labels in the UI language), or from the command line:
 
 ```sh
-adr-deck export                 # dans le dossier du projet
-adr-deck export ~/Bureau/revue.docx --lang fr
+adr-deck export                 # in the project directory
+adr-deck export ~/Desktop/review.docx --lang fr
 ```
 
-Le `.docx` est une **vue** des fichiers MADR, pas une seconde source de vérité : page de garde (nom du projet, dossier, date), tableau récapitulatif de toutes les ADR avec le statut coloré, puis une section par ADR (métadonnées, contexte, critères, options avec pour et contre, décision). Depuis l'application, le fichier est téléchargé ; rien n'est écrit dans le dossier des ADR.
+The `.docx` is a **view** of the MADR files: cover page (project name, directory, date), a summary table of every ADR with a coloured status, then one section per ADR. It carries everything a MADR file holds — metadata (`status`, `date`, `decision-makers`, `consulted`, `informed`, tags and any other front matter key), context, decision drivers, options with their description and pros and cons, decision (chosen or recommended options, justification, next review, superseding ADR), outcome subsections such as `### Consequences`, other sections and « More Information » — so that it can be read back. From the app, the file is downloaded; nothing is written in the ADR directory.
 
-## Développement
+### Import
+
+A `.docx` exported by adr-deck can be edited in Word or Google Docs (texts, statuses, options, decision tables) and turned back into MADR files:
 
 ```sh
-nvm use            # Node 22.22 (lu depuis .nvmrc)
+adr-deck import review.docx                 # into the ADR directory of the current directory (docs/decisions by default)
+adr-deck import review.docx docs/decisions  # into a given directory
+adr-deck import review.docx --force         # also overwrite ADRs whose content changed
+```
+
+| Situation | Result |
+| --- | --- |
+| ADR not in the directory | File created, named after the `File` row (`NNNN-title.md`) |
+| ADR unchanged | File left untouched, even if its layout differs from the generated one |
+| ADR changed | Skipped with a message; rewritten with `--force` |
+
+Imported files are canonical MADR: front matter in the order of the MADR template, standard section headings (English, or French when the existing file used French headings), `Chosen option: "…", because …`, `* Good, because …` / `* Bad, because …`. Labels in English, French or Spanish are recognised. Exporting then importing gives back the same ADRs; only the language hint of code blocks (```` ```ts ````) is lost, as Word has no place for it. A document that does not follow the export structure is refused with an explanation.
+
+## Development
+
+```sh
+nvm use            # Node 22.22 (read from .nvmrc)
 npm install
-npm run dev        # serveur API (127.0.0.1:8787) + front Vite (localhost:5173)
+npm run dev        # API server (127.0.0.1:8787) + Vite front end (localhost:5173)
 ```
 
-En développement, le serveur lit `./workspace` (ignoré par git) ; s'il ne contient aucun fichier MADR, les exemples de `examples/decisions/` y sont copiés. Pour travailler sur un autre dossier :
+In development, the server reads `./workspace` (ignored by git); when it holds no MADR file, the examples of `examples/decisions/` are copied into it. To work on another directory:
 
 ```sh
-ADR_WORKSPACE=~/workspace/mon-projet npm run dev
+ADR_WORKSPACE=~/workspace/my-project npm run dev
 ```
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `ADR_WORKSPACE` | `./workspace` | Dossier de départ de la recherche des ADR (`npm run dev`, Docker) |
-| `ADR_TITLE` | nom du dossier | Nom affiché et page de garde du `.docx` |
-| `ADR_PORT` | `8787` | Port du serveur local (le proxy Vite le suit) |
-| `ADR_HOST` | `127.0.0.1` | Interface d'écoute |
-| `ADR_WEB_PORT` | `5173` | Port du front Vite en développement |
+| `ADR_WORKSPACE` | `./workspace` | Directory where the ADR lookup starts (`npm run dev`, Docker) |
+| `ADR_TITLE` | directory name | Displayed name and `.docx` cover page |
+| `ADR_PORT` | `8787` | Local server port (the Vite proxy follows it) |
+| `ADR_HOST` | `127.0.0.1` | Listening interface |
+| `ADR_WEB_PORT` | `5173` | Vite front end port in development |
 
 ### Conventions
 
-- TypeScript strict partout, sans `any` ; composants Vue en `<script setup lang="ts">`.
-- Code, commentaires, tests et **toute sortie terminal ou message d'API** en anglais ; interface traduite (anglais, français, espagnol) ; documentation en français.
-- Composants d'interface : shadcn-vue uniquement (`npm run ui:add -- <composant>`), icônes `@lucide/vue`.
-- Aucune base de données : toute donnée persistante vit dans les fichiers MADR.
-- Tout nouveau script utile est déclaré dans le `package.json` racine.
+- Strict TypeScript everywhere, no `any`; Vue components in `<script setup lang="ts">`.
+- Code, comments, tests, documentation and **all terminal output or API messages** in English; UI translated (English, French, Spanish).
+- UI components: shadcn-vue only (`npm run ui:add -- <component>`), `@lucide/vue` icons.
+- No database: all persistent data lives in the MADR files.
+- Every useful script is declared in the root `package.json`.
 
 ### Tests
 
-| Paquet | Couverture |
+| Package | Coverage |
 | --- | --- |
-| `@adr/format` | Lecture MADR (anglais, français, sans front matter, blocs de code), statuts, décisions, annulation octet pour octet sur chaque exemple, collection (ordre, doublons, liens de remplacement) |
-| `@adr/convert` | Export `.docx` des exemples, libellés en/fr/es |
-| `@adr/server` | Recherche du dossier, API, conflits de révision, sauvegardes, surveillance du dossier |
-| `@adr/web` | File d'écriture par fichier et rejeu en cas de conflit, rendu Markdown, i18n (détection, catalogues complets, dates) ; e2e : revue complète au clavier, rechargement à chaud, navigation vers l'ADR remplaçante, langue du navigateur et changement de langue |
-| `adr-deck` | Arguments de la CLI ; `npm run test:package` installe le tarball et teste `--review`, `validate` et `export` |
+| `@adr/format` | MADR reading (English, French, no front matter, code blocks), statuses, decisions, byte-for-byte undo on every example, collection (order, duplicates, supersede links), MADR writing |
+| `@adr/convert` | `.docx` export, en/fr/es labels; export then import gives back every example and a rich ADR (markdown, code, outcome subsections, metadata) |
+| `@adr/server` | Directory lookup, API, revision conflicts, backups, directory watching |
+| `@adr/web` | Per-file write queue and replay on conflict, Markdown rendering, i18n (detection, complete catalogs, dates); e2e: full keyboard review, hot reload, navigation to the replacement ADR, browser language and language switch |
+| `adr-deck` | CLI arguments; `npm run test:package` installs the tarball and tests `--review`, `validate`, `export` and `import` |
 
-Avant de livrer : `npm run check`, `npm run test:e2e:chrome` pour toute modification d'interface, `npm run test:package` pour la CLI.
+Before shipping: `npm run check`, `npm run test:e2e:chrome` for any UI change, `npm run test:package` for the CLI.
 
 ## Docker
 
-Une image de production : le serveur Hono sert l'API et le front compilé, sur le port 8787.
+One production image: the Hono server serves the API and the built front end on port 8787.
 
 ```sh
-ADR_DATA_DIR=~/workspace/mon-projet npm run docker:up   # → http://127.0.0.1:8787
+ADR_DATA_DIR=~/workspace/my-project npm run docker:up   # → http://127.0.0.1:8787
 npm run docker:logs
 npm run docker:down
 ```
 
-Le dossier `ADR_DATA_DIR` (défaut `./workspace`) est monté sur `/data` ; les ADR y sont cherchées comme en local (`docs/decisions`…). Le port n'est publié que sur `127.0.0.1`. Les sauvegardes restent dans le conteneur.
+The `ADR_DATA_DIR` directory (default `./workspace`) is mounted on `/data`; ADRs are looked for as they are locally (`docs/decisions`…). The port is published on `127.0.0.1` only. Backups stay inside the container.
 
-## Scripts npm
+## npm scripts
 
-| Commande | Rôle |
+| Command | Purpose |
 | --- | --- |
-| `npm run dev` | Front (Vite) + serveur (Hono) en mode développement |
-| `npm run dev:server` / `npm run dev:web` | L'un ou l'autre seulement |
-| `npm run build` | Build de production du front |
-| `npm start` | Build du front puis serveur unique sur http://127.0.0.1:8787 |
-| `npm test` | Tests Vitest de tous les paquets |
-| `npm run typecheck` | Vérification TypeScript stricte de tous les paquets |
-| `npm run check` | `typecheck` puis `test` |
-| `npm run validate -- <chemin>` | Vérifie des fichiers ou dossiers MADR (chemins relatifs à la racine du dépôt) |
-| `npm run validate:example` | Vérifie `examples/decisions` |
-| `npm run export -- [sortie.docx] [--dir <dossier>] [--lang <en\|fr\|es>]` | Export `.docx` |
-| `npm run install:global` | Construit et installe `adr-deck` globalement |
-| `npm run uninstall:global` | Désinstalle `adr-deck` |
-| `npm run build:package` | Construit le paquet npm `adr-deck` (front + CLI regroupée) |
-| `npm run test:package` | Teste le tarball installé dans un projet temporaire |
-| `npm run pack:package` | Produit le tarball `adr-deck-<version>.tgz` |
-| `npm run test:e2e:install` | Télécharge le Chromium de Playwright (une fois) |
-| `npm run test:e2e` / `test:e2e:chrome` | Parcours Playwright (Chromium de Playwright / Chrome installé) |
-| `npm run ui:add -- <composant>` | Ajoute un composant shadcn-vue au front |
-| `npm run docker:build` / `docker:up` / `docker:down` / `docker:logs` | Image Docker |
-| `npm run clean` | Supprime les builds et rapports de test |
+| `npm run dev` | Front end (Vite) + server (Hono) in development mode |
+| `npm run dev:server` / `npm run dev:web` | Only one of them |
+| `npm run build` | Production build of the front end |
+| `npm start` | Front end build, then a single server on <http://127.0.0.1:8787> |
+| `npm test` | Vitest tests of every package |
+| `npm run typecheck` | Strict TypeScript check of every package |
+| `npm run check` | `typecheck` then `test` |
+| `npm run validate -- <path>` | Check MADR files or directories (paths relative to the repository root) |
+| `npm run validate:example` | Check `examples/decisions` |
+| `npm run export -- [output.docx] [--dir <dir>] [--lang <en\|fr\|es>]` | `.docx` export |
+| `npm run import -- <file.docx> [dir] [--force]` | `.docx` → MADR files |
+| `npm run install:global` | Build and install `adr-deck` globally |
+| `npm run uninstall:global` | Uninstall `adr-deck` |
+| `npm run build:package` | Build the `adr-deck` npm package (front end + bundled CLI) |
+| `npm run test:package` | Test the tarball installed in a temporary project |
+| `npm run pack:package` | Produce the `adr-deck-<version>.tgz` tarball |
+| `npm run test:e2e:install` | Download Playwright's Chromium (once) |
+| `npm run test:e2e` / `test:e2e:chrome` | Playwright scenarios (Playwright's Chromium / installed Chrome) |
+| `npm run ui:add -- <component>` | Add a shadcn-vue component to the front end |
+| `npm run docker:build` / `docker:up` / `docker:down` / `docker:logs` | Docker image |
+| `npm run clean` | Remove builds and test reports |
 
 ## Architecture
 
 ```text
 adr-deck/
 ├── apps/
-│   ├── web/              Vue 3, Vite, TypeScript strict, Pinia, Vue Router, shadcn-vue, Tailwind v4, motion-v, i18n en/fr/es
-│   └── server/           Node 22 + Hono : recherche du dossier, API fichiers, écriture atomique, sauvegardes, SSE
+│   ├── web/              Vue 3, Vite, strict TypeScript, Pinia, Vue Router, shadcn-vue, Tailwind v4, motion-v, en/fr/es i18n
+│   └── server/           Node 22 + Hono: directory lookup, file API, atomic writes, backups, SSE
 ├── packages/
-│   ├── format/           @adr/format : lecture MADR, statuts, édition ciblée (décision, annulation), collection
-│   ├── convert/          @adr/convert : export .docx
-│   └── adr-deck/         paquet npm : CLI « adr-deck » (--review, export, validate), build esbuild, test du tarball
-├── examples/decisions/   9 ADR MADR couvrant tous les statuts
-├── templates/madr.md     modèle d'ADR
-├── .claude/skills/       skill adr-extract
+│   ├── format/           @adr/format: MADR reading and writing, statuses, targeted edits (decision, undo), collection
+│   ├── convert/          @adr/convert: .docx export and import
+│   └── adr-deck/         npm package: “adr-deck” CLI (--review, export, import, validate), esbuild bundle, tarball test
+├── examples/decisions/   9 MADR ADRs covering every status
+├── templates/madr.md     ADR template
+├── .claude/skills/       adr-extract skill
 ├── Dockerfile, docker-compose.yml
-└── workspace/            dossier de développement (ignoré par git)
+└── workspace/            development directory (ignored by git)
 ```
 
-Les paquets internes sont consommés directement en TypeScript ; seul `adr-deck` est compilé (esbuild), au moment du `npm pack`.
+Internal packages are consumed directly as TypeScript; only `adr-deck` is compiled (esbuild), at `npm pack` time.
 
-### Flux d'enregistrement
+### Save flow
 
-1. Chaque décision est une **opération** rejouable (`decide`, `undo`) appliquée au texte du fichier concerné ; l'interface est optimiste.
-2. Une file d'écriture regroupe les changements (anti-rebond 400 ms) et envoie chaque fichier modifié avec sa révision connue (`If-Match`, hash SHA-256 du contenu).
-3. Le serveur vérifie que le fichier n'a pas changé, sauvegarde la version courante, écrit dans un fichier temporaire puis le renomme (écriture atomique).
-4. En cas de conflit (`409`), l'application reprend le fichier du disque, **rejoue les opérations en attente** et prévient l'utilisateur.
-5. Toute modification externe est signalée par SSE : rechargement à chaud du fichier, avec rejeu des opérations non encore enregistrées.
+1. Each decision is a replayable **operation** (`decide`, `undo`) applied to the text of the file concerned; the UI is optimistic.
+2. A write queue batches changes (400 ms debounce) and sends each modified file with its known revision (`If-Match`, SHA-256 hash of the content).
+3. The server checks that the file has not changed, backs up the current version, writes to a temporary file then renames it (atomic write).
+4. On conflict (`409`), the app takes the file from disk, **replays the pending operations** and notifies the user.
+5. Any external modification is signalled over SSE: the file is hot-reloaded and the operations not yet saved are replayed.
 
-### API locale
+### Local API
 
-| Méthode | Route | Usage |
+| Method | Route | Use |
 | --- | --- | --- |
-| GET | `/api/health` | État du serveur et dossier des ADR |
-| GET | `/api/adrs` | Nom du projet, dossier, et tous les fichiers MADR (contenu, révision) |
-| GET | `/api/adrs/:name` | Contenu et révision d'un fichier |
-| PUT | `/api/adrs/:name` | Écriture (`If-Match` obligatoire ; `409` si conflit, `422` si contenu invalide) |
-| GET | `/api/export/docx?lang=fr` | `.docx` de toutes les ADR lisibles (libellés en `en`, `fr` ou `es`) |
-| GET | `/api/events` | Flux SSE : `changed` (fichier modifié ailleurs), `files` (fichier ajouté ou supprimé) |
+| GET | `/api/health` | Server status and ADR directory |
+| GET | `/api/adrs` | Project name, directory, and every MADR file (content, revision) |
+| GET | `/api/adrs/:name` | Content and revision of one file |
+| PUT | `/api/adrs/:name` | Write (`If-Match` required; `409` on conflict, `422` on invalid content) |
+| GET | `/api/export/docx?lang=fr` | `.docx` of every readable ADR (labels in `en`, `fr` or `es`) |
+| GET | `/api/events` | SSE stream: `changed` (file modified elsewhere), `files` (file added or removed) |
 
-Les erreurs renvoient `{ error, code }` : `error` en anglais, `code` (`notFound`, `conflict`, `invalidContent`…) traduit par l'interface. Le serveur n'écoute que sur `127.0.0.1` et n'accepte que des noms `NNNN-titre.md`, sans chemin.
+Errors return `{ error, code }`: `error` in English, `code` (`notFound`, `conflict`, `invalidContent`…) translated by the UI. The server listens on `127.0.0.1` only and accepts `NNNN-title.md` names only, without a path.
 
 ## Design
 
-- **Direction** : sobre, centrée sur la diapositive. Fond quasi noir par défaut (thème clair et réglage système disponibles), gris neutres, pas de décor.
-- **Couleurs** : un seul accent, le bleu shadcn (blue-600 / blue-500), et des couleurs de statut franches — bleu ciel (à décider), vert émeraude (validée), rouge (refusée), ambre (reportée), gris (remplacée), violet (obsolète).
-- **Typographie** : Inter uniquement. En diaporama, titres ≥ 40 px et texte ≥ 20 px, lisibles à 3 m.
-- **Animations** (motion-v et `<Transition>`) : glissement entre ADR, apparition en cascade, sceau de décision, transition partagée grille → diapositive. Avec `prefers-reduced-motion`, tout devient un fondu de 150 ms.
-- **Accessibilité** : focus visible, libellés ARIA sur les décisions et les cartes, contrastes AA, navigation complète au clavier.
+- **Direction**: sober, centred on the slide. Near-black background by default (light theme and system setting available), neutral greys, no decoration.
+- **Colours**: a single accent, shadcn blue (blue-600 / blue-500), and vivid status colours — sky blue (proposed), emerald green (accepted), red (rejected), amber (deferred), grey (superseded), violet (deprecated).
+- **Typography**: Inter only. In the slideshow, titles ≥ 40 px and text ≥ 20 px, readable from 3 m.
+- **Animations** (motion-v and `<Transition>`): slide between ADRs, staggered entrance, decision stamp, shared grid → slide transition. With `prefers-reduced-motion`, everything becomes a 150 ms fade.
+- **Accessibility**: visible focus, ARIA labels on decisions and cards, AA contrast, full keyboard navigation.
 
-## Dépannage
+## Troubleshooting
 
-| Symptôme | Solution |
+| Symptom | Fix |
 | --- | --- |
-| `adr-deck: command not found` | Version de Node différente de celle de l'installation (nvm) : `nvm use 22.22`, ou relancer `npm run install:global` |
-| « Aucun fichier MADR trouvé » | Lancer depuis le dossier des ADR ou la racine du projet ; vérifier le nommage `NNNN-titre.md` |
-| Une ADR n'apparaît pas | Elle est en erreur : voir l'encart en tête de la grille ou `adr-deck validate` |
-| Port 8787 occupé | `adr-deck` prend le suivant libre ; avec `--port` explicite, en choisir un autre |
-| « … modifié ailleurs » | Normal : le fichier a changé pendant la revue ; vos décisions en attente ont été réappliquées |
-| Indicateur *Erreur* | Serveur arrêté ou contenu refusé : relancer puis *Réessayer* |
-| `Executable doesn't exist` (Playwright) | `npm run test:e2e:install`, ou `npm run test:e2e:chrome` |
+| `adr-deck: command not found` | Node version differs from the one used at install time (nvm): `nvm use 22.22`, or run `npm run install:global` again |
+| “No MADR file found” | Launch from the ADR directory or the project root; check the `NNNN-title.md` naming |
+| An ADR does not show up | It has errors: see the notice at the top of the grid or `adr-deck validate` |
+| Port 8787 in use | `adr-deck` takes the next free one; with an explicit `--port`, pick another |
+| “… modified elsewhere” | Expected: the file changed during the review; your pending decisions were reapplied |
+| *Error* indicator | Server stopped or content refused: restart it, then *Retry* |
+| `Executable doesn't exist` (Playwright) | `npm run test:e2e:install`, or `npm run test:e2e:chrome` |
 
-## Limites connues
+## Known limitations
 
-- Le récapitulatif et la pile d'annulation portent sur la séance en cours : un rechargement de la page les réinitialise (les décisions, elles, sont dans les fichiers).
-- Pas d'historique des décisions dans le fichier (format MADR pur) : l'historique, c'est git.
-- Les statuts « remplacée » et « obsolète » se saisissent dans le fichier, pas depuis la barre de décision.
-- Les décideurs (`decision-makers`) ne sont pas modifiés par l'application.
-- Les sous-dossiers ne sont pas parcourus : un seul dossier d'ADR par revue.
-- Pas de multi-utilisateur temps réel ni d'hébergement en ligne : l'application est conçue pour un poste local.
+- The summary and the undo stack cover the current session: reloading the page resets them (the decisions themselves are in the files).
+- No decision history in the file (plain MADR): git is the history.
+- The “superseded” and “deprecated” statuses are typed in the file, not set from the decision bar.
+- Decision makers (`decision-makers`) are not changed by the app.
+- Subdirectories are not scanned: one ADR directory per review.
+- No real-time multi-user mode and no online hosting: the app is designed for a local workstation.
