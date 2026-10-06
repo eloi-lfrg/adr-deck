@@ -31,11 +31,7 @@
     "install:global": "npm run install:global -w adr-deck",
     "uninstall:global": "npm run uninstall:global -w adr-deck",
     "ui:add": "npm run ui:add -w @adr/web --",
-    "clean": "rm -rf apps/web/dist apps/web/test-results apps/web/playwright-report apps/web/node_modules/.tmp",
-    "docker:build": "docker compose build",
-    "docker:up": "docker compose up -d --build",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f adr-deck"
+    "clean": "rm -rf apps/web/dist apps/web/test-results apps/web/playwright-report apps/web/node_modules/.tmp"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

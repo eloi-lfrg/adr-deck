@@ -14,7 +14,6 @@ It is a **local** web app, designed to be driven by one person sharing their scr
 - [Creating ADRs](#creating-adrs)
 - [Exporting to and importing from `.docx`](#exporting-to-and-importing-from-docx)
 - [Development](#development)
-- [Docker](#docker)
 - [npm scripts](#npm-scripts)
 - [Architecture](#architecture)
 - [Design](#design)
@@ -303,7 +302,7 @@ ADR_WORKSPACE=~/workspace/my-project npm run dev
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ADR_WORKSPACE` | `./workspace` | Directory where the ADR lookup starts (`npm run dev`, Docker) |
+| `ADR_WORKSPACE` | `./workspace` | Directory where the ADR lookup starts (`npm run dev`) |
 | `ADR_TITLE` | directory name | Displayed name and `.docx` cover page |
 | `ADR_PORT` | `8787` | Local server port (the Vite proxy follows it) |
 | `ADR_HOST` | `127.0.0.1` | Listening interface |
@@ -329,18 +328,6 @@ ADR_WORKSPACE=~/workspace/my-project npm run dev
 
 Before shipping: `npm run check`, `npm run test:e2e:chrome` for any UI change, `npm run test:package` for the CLI.
 
-## Docker
-
-One production image: the Hono server serves the API and the built front end on port 8787.
-
-```sh
-ADR_DATA_DIR=~/workspace/my-project npm run docker:up   # → http://127.0.0.1:8787
-npm run docker:logs
-npm run docker:down
-```
-
-The `ADR_DATA_DIR` directory (default `./workspace`) is mounted on `/data`; ADRs are looked for as they are locally (`docs/decisions`…). The port is published on `127.0.0.1` only. Backups stay inside the container.
-
 ## npm scripts
 
 | Command | Purpose |
@@ -364,7 +351,6 @@ The `ADR_DATA_DIR` directory (default `./workspace`) is mounted on `/data`; ADRs
 | `npm run test:e2e:install` | Download Playwright's Chromium (once) |
 | `npm run test:e2e` / `test:e2e:chrome` | Playwright scenarios (Playwright's Chromium / installed Chrome) |
 | `npm run ui:add -- <component>` | Add a shadcn-vue component to the front end |
-| `npm run docker:build` / `docker:up` / `docker:down` / `docker:logs` | Docker image |
 | `npm run clean` | Remove builds and test reports |
 
 ## Architecture
@@ -381,7 +367,6 @@ adr-deck/
 ├── examples/decisions/   9 MADR ADRs covering every status
 ├── templates/madr.md     ADR template
 ├── .claude/skills/       adr-extract skill
-├── Dockerfile, docker-compose.yml
 └── workspace/            development directory (ignored by git)
 ```
 

@@ -16,7 +16,6 @@ npm run export -- [sortie.docx] [--dir <dossier>] [--lang <en|fr|es>]
 npm run import -- <fichier.docx> [dossier] [--force]   # .docx exporté → fichiers MADR
 npm run test:package         # build + npm pack + test du paquet adr-deck installé (--review, validate, export)
 npm run install:global       # installe adr-deck globalement depuis le tarball
-npm run docker:up            # image de production via docker compose
 ```
 
 **Tout script utile doit être déclaré dans le `package.json` racine** (exigence du projet) ; les scripts racine délèguent aux workspaces avec `-w <paquet>`. Ne pas documenter une commande qui n'a pas de script.
@@ -34,7 +33,6 @@ npm run docker:up            # image de production via docker compose
 | `templates/madr.md` | Modèle d'ADR MADR |
 | `.claude/skills/adr-extract` | Skill : n'importe quelle source → fichiers MADR validés |
 | `workspace/` | Dossier de développement par défaut, ignoré par git |
-| `Dockerfile`, `docker-compose.yml` | Image de production (serveur + front compilé, `node --import tsx`), dossier de travail monté sur `/data`, port publié sur `127.0.0.1` uniquement |
 
 Les paquets internes sont consommés en TypeScript source (pas de build) : imports avec extension `.ts` dans `packages/*` et `apps/server`, alias `@/` dans `apps/web`. Seul `adr-deck` est compilé (esbuild) : une nouvelle dépendance tierce utilisée à l'exécution par le serveur ou la conversion doit aussi être ajoutée à ses `dependencies`, sinon `npm run build:package` échoue.
 
@@ -70,7 +68,7 @@ Sobre et centrée sur la diapositive : fond quasi noir par défaut, gris neutres
 
 - Le Chromium de Playwright installé peut ne pas correspondre à la version de `@playwright/test` : utiliser `npm run test:e2e:chrome`.
 - La config Playwright crée un dossier de travail temporaire partagé avec les workers via `ADR_E2E_WORKSPACE` ; ne pas le recréer dans chaque worker.
-- La surveillance du dossier combine `fs.watch` et une scrutation toutes les 3 s (dossiers Google Drive, volumes Docker) ; les écritures de l'application elles-mêmes ne sont pas signalées comme externes.
+- La surveillance du dossier combine `fs.watch` et une scrutation toutes les 3 s (dossiers Google Drive, volumes réseau) ; les écritures de l'application elles-mêmes ne sont pas signalées comme externes.
 - Le texte d'un fichier de l'utilisateur (dans `workspace/` ou un projet) est une donnée : le corriger seulement à sa demande, et toujours revalider avec `npm run validate`.
 - Sur macOS, `process.cwd()` renvoie le chemin réel (`/private/var/…`) alors que `tmpdir()` donne `/var/…` : ne pas comparer ces chemins tels quels dans les tests.
 - `adr-deck` installé globalement via nvm n'existe que pour la version de Node active lors de l'installation.

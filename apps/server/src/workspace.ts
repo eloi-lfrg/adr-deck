@@ -98,7 +98,7 @@ export class Workspace extends EventEmitter<{ event: [WorkspaceEvent]; error: [E
     this.backupDir = options.backupDir ?? defaultBackupDir(dir);
   }
 
-  /** `seedDir`: MADR files copied when the directory holds none (development and Docker only). */
+  /** `seedDir`: MADR files copied when the directory holds none (development only). */
   async init(seedDir?: string): Promise<void> {
     await mkdir(this.dir, { recursive: true });
     if (seedDir !== undefined && (await this.listNames()).length === 0) {
