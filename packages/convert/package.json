@@ -1,0 +1,22 @@
+{
+  "name": "@adr/convert",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "jszip": "^3.10.1",
+    "vitest": "^5.0.3"
+  },
+  "dependencies": {
+    "@adr/format": "*",
+    "docx": "^9.8.1"
+  }
+}

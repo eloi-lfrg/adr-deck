@@ -1,0 +1,49 @@
+{
+  "name": "adr-deck",
+  "version": "0.2.0",
+  "description": "Revue d'ADR au format MADR : une ADR par diapositive, une décision en un clic, écrite directement dans le fichier Markdown.",
+  "keywords": [
+    "adr",
+    "madr",
+    "architecture-decision-record",
+    "decision",
+    "review",
+    "cli"
+  ],
+  "license": "UNLICENSED",
+  "author": "Eloi Lafargue",
+  "type": "module",
+  "bin": {
+    "adr-deck": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.22"
+  },
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "test:package": "tsx scripts/smoke.ts",
+    "install:global": "tsx scripts/install-global.ts",
+    "uninstall:global": "npm uninstall --global adr-deck",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.3",
+    "docx": "^9.8.1",
+    "hono": "^4.13.13",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@adr/convert": "*",
+    "@adr/format": "*",
+    "@adr/server": "*",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.3"
+  }
+}

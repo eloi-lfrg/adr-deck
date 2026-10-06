@@ -1,0 +1,45 @@
+{
+  "name": "adr-deck-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w @adr/server\" \"npm run dev -w @adr/web\"",
+    "dev:server": "npm run dev -w @adr/server",
+    "dev:web": "npm run dev -w @adr/web",
+    "build": "npm run build -w @adr/web",
+    "start": "npm run build && npm run start -w @adr/server",
+    "test": "npm test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e -w @adr/web",
+    "test:e2e:chrome": "npm run test:e2e:chrome -w @adr/web",
+    "test:e2e:install": "npm run test:e2e:install -w @adr/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "check": "npm run typecheck && npm test",
+    "validate": "tsx packages/adr-deck/src/cli.ts validate",
+    "validate:example": "tsx packages/adr-deck/src/cli.ts validate examples/decisions",
+    "export": "tsx packages/adr-deck/src/cli.ts export",
+    "build:package": "npm run build -w adr-deck",
+    "pack:package": "npm pack -w adr-deck",
+    "test:package": "npm run test:package -w adr-deck",
+    "install:global": "npm run install:global -w adr-deck",
+    "uninstall:global": "npm run uninstall:global -w adr-deck",
+    "ui:add": "npm run ui:add -w @adr/web --",
+    "clean": "rm -rf apps/web/dist apps/web/test-results apps/web/playwright-report apps/web/node_modules/.tmp",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f adr-deck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "concurrently": "^10.0.5",
+    "typescript": "^5.9.3",
+    "tsx": "^4.23.15"
+  }
+}
