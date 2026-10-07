@@ -58,27 +58,29 @@ try {
   check(/^\d+\.\d+\.\d+/u.test(run(bin, ['--version'], repo)), 'adr-deck --version');
 
   const port = await freePort();
-  const server = spawn(bin, ['--review', '--no-open', '--port', String(port)], { cwd: repo, stdio: ['ignore', 'pipe', 'inherit'] });
+  const server = spawn(bin, ['review', '--no-open', '--port', String(port)], { cwd: repo, stdio: ['ignore', 'pipe', 'inherit'] });
   try {
     const health = await waitFor(`http://127.0.0.1:${port}/api/health`, 15_000);
     check(health.ok, 'GET /api/health');
     const page = await fetch(`http://127.0.0.1:${port}/`);
     check(page.ok && (await page.text()).includes('<div id="app"'), 'GET / serves the built front end');
+    const timeline = await fetch(`http://127.0.0.1:${port}/timeline`);
+    check(timeline.ok && (await timeline.text()).includes('<div id="app"'), 'GET /timeline serves the front end (adr-deck timeline)');
     const body = (await (await fetch(`http://127.0.0.1:${port}/api/adrs`)).json()) as { dir: string; files: unknown[] };
-    check(body.dir.endsWith('/repo/docs/decisions') && body.files.length === 9, '--review reads docs/decisions from the current directory');
+    check(body.dir.endsWith('/repo/docs/decisions') && body.files.length === 15, 'review reads docs/decisions from the current directory');
   } finally {
     server.kill('SIGTERM');
   }
 
-  check(run(bin, ['validate'], repo).includes('9 readable ADRs'), 'adr-deck validate');
+  check(run(bin, ['validate'], repo).includes('15 readable ADRs'), 'adr-deck validate');
   run(bin, ['export', 'decisions.docx'], repo);
   const docx = await readFile(join(repo, 'decisions.docx'));
   check((await readdir(repo)).includes('decisions.docx') && docx.subarray(0, 2).toString() === 'PK', 'adr-deck export → .docx');
 
   // The export reads back: unchanged ADRs are left as they are, and a fresh directory gets every ADR.
-  check(run(bin, ['import', 'decisions.docx'], repo).includes('0 created, 0 updated, 9 unchanged, 0 skipped'), 'adr-deck import of an unchanged export');
-  check(run(bin, ['import', 'decisions.docx', 'imported'], repo).includes('9 created'), 'adr-deck import → MADR files');
-  check(run(bin, ['validate', 'imported'], repo).includes('9 readable ADRs'), 'imported MADR files are valid');
+  check(run(bin, ['import', 'decisions.docx'], repo).includes('0 created, 0 updated, 15 unchanged, 0 skipped'), 'adr-deck import of an unchanged export');
+  check(run(bin, ['import', 'decisions.docx', 'imported'], repo).includes('15 created'), 'adr-deck import → MADR files');
+  check(run(bin, ['validate', 'imported'], repo).includes('15 readable ADRs'), 'imported MADR files are valid');
 } finally {
   await rm(root, { recursive: true, force: true });
 }

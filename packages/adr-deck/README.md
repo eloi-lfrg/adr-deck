@@ -10,8 +10,9 @@ Node.js ≥ 22.22.
 
 ```sh
 cd mon-projet
-adr-deck --review            # lit les ADR du dossier courant et ouvre le navigateur
-adr-deck --review ../autre   # autre dossier
+adr-deck                     # lit les ADR du dossier courant et ouvre le navigateur
+adr-deck review ../autre     # autre dossier
+adr-deck timeline            # même application, ouverte sur la frise chronologique des ADR
 ```
 
 Les ADR sont les fichiers `NNNN-titre.md` du dossier ; s'il n'y en a pas, `docs/decisions`, `docs/adr`, `doc/adr`, `docs/architecture/decisions`, `adr` puis `decisions` sont essayés.
@@ -20,7 +21,6 @@ L'application est servie sur http://127.0.0.1:8787 (ou le port libre suivant). U
 
 | Option | Rôle | Variable |
 | --- | --- | --- |
-| `-r, --review [dossier]` | Lance la revue (défaut : dossier courant) | — |
 | `-p, --port <port>` | Port d'écoute (défaut : 8787, ou le suivant libre) | `ADR_PORT` |
 | `--host <hôte>` | Adresse d'écoute (défaut : 127.0.0.1) | `ADR_HOST` |
 | `--no-open` | N'ouvre pas le navigateur | — |
@@ -31,9 +31,10 @@ L'application est servie sur http://127.0.0.1:8787 (ou le port libre suivant). U
 
 L'interface est en anglais, français et espagnol : elle suit la langue du navigateur et se change depuis l'en-tête. La sortie terminal est en anglais.
 
-## Exporter, importer et valider
+## Créer, exporter, importer et valider
 
 ```sh
+adr-deck add                        # nouvelle ADR, champ par champ (statut « proposed » par défaut)
 adr-deck export                     # <projet>-decisions.docx dans le dossier courant
 adr-deck export revue.docx --lang fr  # nom de sortie et langue des libellés
 adr-deck import revue.docx           # .docx exporté (éventuellement modifié dans Word) → fichiers MADR

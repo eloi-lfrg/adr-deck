@@ -13,6 +13,8 @@ export interface ReviewOptions {
   portExplicit: boolean;
   host: string;
   open: boolean;
+  /** Page the browser opens on. */
+  view: 'grid' | 'timeline';
 }
 
 export type Command =
@@ -21,6 +23,8 @@ export type Command =
   | { kind: 'validate'; paths: string[] }
   /** `dir`: null = the decisions directory of the current directory (see `cli.ts`). */
   | { kind: 'import'; input: string; dir: string | null; force: boolean }
+  /** `dir`: null = the decisions directory of the current directory (see `cli.ts`). */
+  | { kind: 'add'; dir: string | null }
   | { kind: 'help' }
   | { kind: 'version' };
 
@@ -40,7 +44,6 @@ function parse(argv: string[]) {
       allowNegative: true,
       strict: true,
       options: {
-        review: { type: 'boolean', short: 'r' },
         port: { type: 'string', short: 'p' },
         host: { type: 'string' },
         open: { type: 'boolean', default: true },
@@ -78,25 +81,30 @@ export function parseCommand(argv: string[], env: NodeJS.ProcessEnv, cwd: string
     const dir = target ?? values.dir;
     return { kind: 'import', input: resolve(cwd, input), dir: dir === undefined ? null : resolve(cwd, dir), force: values.force === true };
   }
+  if (subcommand === 'add') {
+    if (rest.length > 1) throw new ArgsError(`Expected at most one directory, got: ${rest.join(' ')}`);
+    const dir = rest[0] ?? values.dir;
+    return { kind: 'add', dir: dir === undefined ? null : resolve(cwd, dir) };
+  }
   if (subcommand === 'validate') {
     return { kind: 'validate', paths: (rest.length > 0 ? rest : [values.dir ?? '.']).map((path) => resolve(cwd, path)) };
   }
-  if (values.review !== true) {
-    if (subcommand !== undefined) throw new ArgsError(`Unknown command: ${subcommand}`);
-    return { kind: 'help' };
-  }
-  if (positionals.length > 1) throw new ArgsError(`Expected a single directory, got: ${positionals.join(' ')}`);
+  // `review` is the default command; `timeline` is the same app, opened on the timeline.
+  if (subcommand !== undefined && subcommand !== 'review' && subcommand !== 'timeline') throw new ArgsError(`Unknown command: ${subcommand}`);
+  const dirs = rest;
+  if (dirs.length > 1) throw new ArgsError(`Expected a single directory, got: ${dirs.join(' ')}`);
 
   const fromFlag = values.port !== undefined ? parsePort(values.port, '--port') : null;
   const fromEnv = env['ADR_PORT'] ? parsePort(env['ADR_PORT'], 'ADR_PORT') : null;
   return {
     kind: 'review',
     options: {
-      root: resolve(cwd, positionals[0] ?? values.dir ?? '.'),
+      root: resolve(cwd, dirs[0] ?? values.dir ?? '.'),
       port: fromFlag ?? fromEnv ?? DEFAULT_PORT,
       portExplicit: fromFlag !== null || fromEnv !== null,
       host: values.host ?? (env['ADR_HOST'] || DEFAULT_HOST),
       open: values.open !== false,
+      view: subcommand === 'timeline' ? 'timeline' : 'grid',
     },
   };
 }

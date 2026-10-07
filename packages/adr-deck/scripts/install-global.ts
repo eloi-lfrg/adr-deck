@@ -17,7 +17,7 @@ try {
     .pop()!;
   execFileSync('npm', ['install', '--global', '--no-audit', '--no-fund', join(staging, tarball)], { stdio: 'inherit' });
   const prefix = execFileSync('npm', ['prefix', '--global'], { encoding: 'utf8' }).trim();
-  process.stdout.write(`✓ adr-deck installed in ${prefix} — run "adr-deck --review" from a directory of ADRs.\n`);
+  process.stdout.write(`✓ adr-deck installed in ${prefix} — run "adr-deck" from a directory of ADRs.\n`);
 } finally {
   await rm(staging, { recursive: true, force: true });
 }

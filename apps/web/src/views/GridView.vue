@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { STATUSES, type Adr, type Status } from '@adr/format';
 import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { motion } from 'motion-v';
 import { toast } from 'vue-sonner';
-import { FileDown, Play, Search, X } from '@lucide/vue';
+import { FileDown, GitCommitVertical, Play, Search, X } from '@lucide/vue';
 import AdrCard from '@/components/AdrCard.vue';
 import CommandPalette from '@/components/CommandPalette.vue';
 import FileHeader from '@/components/FileHeader.vue';
@@ -18,6 +19,7 @@ import { REVIEW_MODES, useLaunch, type ReviewMode } from '@/composables/useLaunc
 import { useI18n } from '@/i18n';
 import { api } from '@/lib/api';
 import { STATUS_STYLES } from '@/lib/status';
+import { timelineDate } from '@/lib/timeline';
 import { cn } from '@/lib/utils';
 import { usePreferencesStore } from '@/stores/preferences';
 import { useReviewStore } from '@/stores/review';
@@ -27,6 +29,7 @@ type SortKey = 'file' | 'date' | 'status';
 const review = useReviewStore();
 const preferences = usePreferencesStore();
 const launch = useLaunch();
+const router = useRouter();
 const { m, locale } = useI18n();
 const { duration } = useMotionPreset();
 
@@ -61,8 +64,13 @@ const visible = computed<Adr[]>(() => {
   );
   if (sort.value === 'status') return [...list].sort((a, b) => STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status));
   if (sort.value === 'date') {
-    const key = (adr: Adr): string => adr.decision?.date ?? adr.date ?? '';
-    return [...list].sort((a, b) => key(b).localeCompare(key(a)));
+    // Newest first, like the timeline; undated ADRs last, in number order (the sort is stable).
+    return [...list].sort((a, b) => {
+      const first = timelineDate(a);
+      const second = timelineDate(b);
+      if (first === null || second === null) return first === second ? 0 : first === null ? 1 : -1;
+      return second.localeCompare(first);
+    });
   }
   return list;
 });
@@ -134,6 +142,10 @@ useShortcuts((event) => {
     launchReview();
     return true;
   }
+  if (event.key === 't' || event.key === 'T') {
+    void router.push({ name: 'timeline' });
+    return true;
+  }
   if (event.key === '/') {
     (searchInput.value?.$el as HTMLInputElement | undefined)?.focus();
     return true;
@@ -187,6 +199,9 @@ onMounted(() => {
             <label v-if="mode === 'pending'" class="flex items-center gap-2 text-sm text-muted-foreground">
               <Switch v-model="preferences.includeDeferred" /> {{ m.grid.includeDeferred }}
             </label>
+            <Button variant="ghost" size="sm" class="text-muted-foreground" :title="m.grid.timelineLabel" @click="router.push({ name: 'timeline' })">
+              <GitCommitVertical /> {{ m.grid.timeline }}
+            </Button>
             <Button variant="ghost" size="icon" class="text-muted-foreground" :aria-label="m.grid.export" :title="m.grid.export" @click="exportDocx"><FileDown /></Button>
             <Button @click="launchReview">
               <Play /> {{ m.grid.launch }}

@@ -25,6 +25,7 @@
     "validate:example": "tsx packages/adr-deck/src/cli.ts validate examples/decisions",
     "export": "tsx packages/adr-deck/src/cli.ts export",
     "import": "tsx packages/adr-deck/src/cli.ts import",
+    "add": "tsx packages/adr-deck/src/cli.ts add",
     "build:package": "npm run build -w adr-deck",
     "pack:package": "npm pack -w adr-deck",
     "test:package": "npm run test:package -w adr-deck",

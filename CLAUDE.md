@@ -1,6 +1,6 @@
 # CLAUDE.md — adr-deck
 
-Application web locale de revue d'ADR au format **MADR** : `adr-deck --review` lance l'application sur les fichiers `NNNN-titre.md` du dossier courant (ou de `docs/decisions`, `docs/adr`…), une ADR par diapositive, une décision écrite directement dans le fichier MADR. Le README (en anglais) décrit le produit en détail ; ce fichier résume ce qu'il faut savoir pour travailler dans le code.
+Application web locale de revue d'ADR au format **MADR** : `adr-deck` (ou `adr-deck review [dossier]`) lance l'application sur les fichiers `NNNN-titre.md` du dossier courant (ou de `docs/decisions`, `docs/adr`…), une ADR par diapositive, une décision écrite directement dans le fichier MADR. Le README (en anglais) décrit le produit en détail ; ce fichier résume ce qu'il faut savoir pour travailler dans le code.
 
 ## Commandes
 
@@ -14,7 +14,8 @@ npm run test:e2e:chrome      # parcours Playwright avec le Chrome installé (le 
 npm run validate -- <fichier|dossier>
 npm run export -- [sortie.docx] [--dir <dossier>] [--lang <en|fr|es>]
 npm run import -- <fichier.docx> [dossier] [--force]   # .docx exporté → fichiers MADR
-npm run test:package         # build + npm pack + test du paquet adr-deck installé (--review, validate, export)
+npm run add -- [dossier]     # nouvelle ADR en mode interactif
+npm run test:package         # build + npm pack + test du paquet adr-deck installé (review, validate, export)
 npm run install:global       # installe adr-deck globalement depuis le tarball
 ```
 
@@ -24,12 +25,12 @@ npm run install:global       # installe adr-deck globalement depuis le tarball
 
 | Chemin | Rôle |
 | --- | --- |
-| `packages/format` | `@adr/format` : schéma Zod (`schema.ts`), titres et statuts MADR FR/EN (`vocabulary.ts`), structure des lignes (`layout.ts`), lecture (`parse.ts`), édition ciblée `decide` / `undo` (`operations.ts`), écriture d'un fichier MADR complet (`serialize.ts`), collection d'un dossier (`collection.ts`), nommage `NNNN-titre.md` (`files.ts`), dates Europe/Paris (`dates.ts`) |
+| `packages/format` | `@adr/format` : schéma Zod (`schema.ts`), titres et statuts MADR FR/EN (`vocabulary.ts`), structure des lignes (`layout.ts`), lecture (`parse.ts`), édition ciblée `decide` / `undo` (`operations.ts`), écriture d'un fichier MADR complet (`serialize.ts`), collection d'un dossier (`collection.ts`), nommage `NNNN-titre.md` et numéro suivant (`files.ts`), dates Europe/Paris (`dates.ts`) |
 | `packages/convert` | `@adr/convert` : export `.docx` d'une collection d'ADR (`export.ts`), import inverse (`import.ts`, mammoth), libellés en/fr/es (`styles.ts`) |
-| `packages/adr-deck` | Paquet npm : CLI `adr-deck` (`src/cli.ts`, `src/args.ts` : `--review`, `export`, `validate`), regroupée par esbuild avec les `@adr/*` (`scripts/build.ts`), test du tarball (`scripts/smoke.ts`), installation globale (`scripts/install-global.ts`) |
+| `packages/adr-deck` | Paquet npm : CLI `adr-deck` (`src/cli.ts`, `src/args.ts` : `review` par défaut, `timeline` (même application ouverte sur `/timeline`), `add`, `export`, `import`, `validate` ; questions de `add` dans `src/add.ts`, testées avec des réponses scriptées), regroupée par esbuild avec les `@adr/*` (`scripts/build.ts`), test du tarball (`scripts/smoke.ts`), installation globale (`scripts/install-global.ts`) |
 | `apps/server` | Hono : API (`app.ts`), recherche du dossier des ADR, écriture atomique, sauvegardes dans `~/.adr-deck/backups`, surveillance (`workspace.ts`), configuration de dev (`config.ts`) |
-| `apps/web` | Vue 3 : vues (`views/`), diaporama (`components/slideshow/`), store de la collection et file d'écriture par fichier (`stores/review.ts`), traductions (`i18n/`), composants shadcn-vue générés (`components/ui/`) |
-| `examples/decisions/` | 9 ADR MADR couvrant tous les statuts — servent aux tests (annulation octet pour octet) et de graine en dev |
+| `apps/web` | Vue 3 : vues (`views/`), diaporama (`components/slideshow/`), frise chronologique (`views/TimelineView.vue`, `components/timeline/`, tri et regroupement dans `lib/timeline.ts`), store de la collection et file d'écriture par fichier (`stores/review.ts`), traductions (`i18n/`), composants shadcn-vue générés (`components/ui/`) |
+| `examples/decisions/` | 15 ADR MADR couvrant tous les statuts — servent aux tests (annulation octet pour octet) et de graine en dev |
 | `templates/madr.md` | Modèle d'ADR MADR |
 | `.claude/skills/adr-extract` | Skill : n'importe quelle source → fichiers MADR validés |
 | `workspace/` | Dossier de développement par défaut, ignoré par git |

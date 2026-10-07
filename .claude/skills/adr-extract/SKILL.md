@@ -6,7 +6,7 @@ argument-hint: <chemin du fichier ou texte> [dossier de sortie]
 
 # Extraire des ADR au format MADR
 
-Objectif : à partir de **n'importe quelle entrée**, produire des fichiers [MADR](https://adr.github.io/madr/) **valides** (validés par `npm run validate`), fidèles à la source, prêts à être revus avec `adr-deck --review`.
+Objectif : à partir de **n'importe quelle entrée**, produire des fichiers [MADR](https://adr.github.io/madr/) **valides** (validés par `npm run validate`), fidèles à la source, prêts à être revus avec `adr-deck`.
 
 Entrée : `$ARGUMENTS` — un ou plusieurs chemins de fichiers, une URL déjà accessible via un outil, ou du texte collé dans la conversation. Si rien n'est fourni, demander la source.
 
@@ -120,4 +120,4 @@ Répondre en français, brièvement :
 - dossier, fichiers créés et nombre d'ADR par statut ;
 - les interprétations faites (statuts ramenés à un autre, options complétées, informations placées dans le contexte) ;
 - ce qui manquait dans la source (ADR sans option, sans contexte…) ;
-- comment ouvrir la revue : `adr-deck --review` depuis le dossier (ou son projet).
+- comment ouvrir la revue : `adr-deck` depuis le dossier (ou son projet).

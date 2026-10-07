@@ -15,6 +15,8 @@ import {
   DecisionError,
   isMadrFileName,
   issueMessage,
+  madrFileName,
+  nextAdrNumber,
   parseCollection,
   parseMadr,
   parseMadrStrict,
@@ -41,6 +43,14 @@ describe('file names', () => {
     expect(isMadrFileName('0001-a.md')).toBe(true);
     expect(isMadrFileName('template.md')).toBe(false);
     expect(['ADR-0010', 'ADR-0002'].sort(compareAdrIds)).toEqual(['ADR-0002', 'ADR-0010']);
+  });
+
+  it('names a new file and numbers the next ADR', () => {
+    expect(madrFileName('7', 'Use PostgreSQL 16 (managed)!')).toBe('0007-use-postgresql-16-managed.md');
+    expect(madrFileName('00012', 'Écrire les décisions')).toBe('00012-ecrire-les-decisions.md');
+    expect(madrFileName('3', '!!!')).toBe('0003-decision.md');
+    expect(nextAdrNumber([])).toBe(1);
+    expect(nextAdrNumber(['0002-b.md', '0010-j.md', 'README.md', '0003-c.md'])).toBe(11);
   });
 });
 
@@ -282,7 +292,7 @@ describe('parseCollection', () => {
   });
 
   it('links the examples', () => {
-    expect(parseCollection(examples).replaces).toEqual({ 'ADR-0008': ['ADR-0007'] });
+    expect(parseCollection(examples).replaces).toEqual({ 'ADR-0008': ['ADR-0007'], 'ADR-0015': ['ADR-0014'] });
   });
 });
 

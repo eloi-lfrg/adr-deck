@@ -2,9 +2,11 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hasErrors, issueMessage, parseCollection, parseMadr, sameAdrContent, type FileIssues } from '@adr/format';
+import { applyDecision, hasErrors, issueMessage, nextAdrNumber, parisDate, parseCollection, parseMadr, sameAdrContent, serializeMadr, type FileIssues } from '@adr/format';
 import { DocxImportError, exportDocx, importDocx, type ExportLanguage } from '@adr/convert';
 import { docxFileName, resolveDecisionsDir, startServer, Workspace } from '@adr/server';
+import { checkbox, confirm, input, select } from '@inquirer/prompts';
+import { askNewAdr, majorityLanguage, type Prompter } from './add.ts';
 import { ArgsError, DEFAULT_HOST, DEFAULT_PORT, parseCommand, type ReviewOptions } from './args.ts';
 
 const PROGRAM = 'adr-deck';
@@ -20,7 +22,9 @@ const PACKAGE_JSON = asset('../package.json');
 const USAGE = `adr-deck — review MADR architecture decision records, one decision per slide.
 
 Usage:
-  ${PROGRAM} --review [dir]          Open the review of the ADRs in the directory (default: current directory)
+  ${PROGRAM} [review] [dir]          Open the review of the ADRs in the directory (default: current directory)
+  ${PROGRAM} timeline [dir]          Read every ADR of the directory on a timeline
+  ${PROGRAM} add [dir]               Create a new ADR interactively
   ${PROGRAM} export [output.docx]    Build a .docx from the ADRs of the current directory
   ${PROGRAM} import <file.docx> [dir] Turn a .docx exported by adr-deck back into MADR files
   ${PROGRAM} validate [path…]        Check MADR files or directories (default: current directory)
@@ -29,11 +33,10 @@ ADRs are the NNNN-title.md files of the directory or, failing that, of docs/deci
 doc/adr, docs/architecture/decisions, adr or decisions.
 
 Options:
-  -r, --review          Start the local server and open the app
   -p, --port <port>     Port to listen on (default: ${DEFAULT_PORT} or the next free one; or ADR_PORT)
       --host <host>     Address to listen on (default: ${DEFAULT_HOST}, or ADR_HOST)
       --no-open         Do not open the browser
-  -d, --dir <dir>       Starting directory for export, import and validate (default: current directory)
+  -d, --dir <dir>       Starting directory (default: current directory)
   -f, --force           import: overwrite ADRs whose content differs from the .docx
   -o, --output <file>   .docx file written by export
   -l, --lang <lang>     Language of the .docx labels: en, fr or es (default: en)
@@ -103,10 +106,11 @@ async function review(options: ReviewOptions): Promise<void> {
   }
   const running = server;
   const { adrs, issues } = parseCollection(await running.workspace.readAll());
-  write(process.stdout, `adr-deck — ${running.url}\nDecisions: ${dir} (${adrs.length} ADR${adrs.length === 1 ? '' : 's'})\nPress Ctrl+C to stop.`);
+  const pageUrl = options.view === 'timeline' ? `${running.url}/timeline` : running.url;
+  write(process.stdout, `adr-deck — ${pageUrl}\nDecisions: ${dir} (${adrs.length} ADR${adrs.length === 1 ? '' : 's'})\nPress Ctrl+C to stop.`);
   if (adrs.length === 0) write(process.stderr, 'No MADR file (NNNN-title.md) found: see adr-deck --help.');
   printIssues(issues, dir);
-  if (options.open) openBrowser(running.url);
+  if (options.open) openBrowser(pageUrl);
 
   let stopping = false;
   const shutdown = (): void => {
@@ -172,11 +176,7 @@ async function validate(paths: string[]): Promise<number> {
  */
 async function importCommand(input: string, target: string | null, force: boolean): Promise<number> {
   if ((await kindOf(input)) !== 'file') throw new ArgsError(`Not a file: ${input}`);
-  let dir = target;
-  if (dir === null) {
-    const found = await resolveDecisionsDir(process.cwd());
-    dir = (await new Workspace(found).listNames()).length > 0 ? found : join(process.cwd(), 'docs', 'decisions');
-  }
+  const dir = await writableDecisionsDir(target);
   await mkdir(dir, { recursive: true });
   const existing = new Map((await new Workspace(dir).readAll()).map((file) => [file.name, parseMadr(file.content, file.name).adr]));
 
@@ -219,6 +219,68 @@ async function importCommand(input: string, target: string | null, force: boolea
   return counts.skipped > 0 ? 1 : 0;
 }
 
+/** Decisions directory to write into: the one found from the current directory, or docs/decisions when there is none. */
+async function writableDecisionsDir(target: string | null): Promise<string> {
+  if (target !== null) return target;
+  const found = await resolveDecisionsDir(process.cwd());
+  return (await new Workspace(found).listNames()).length > 0 ? found : join(process.cwd(), 'docs', 'decisions');
+}
+
+const terminalPrompter: Prompter = {
+  text: ({ message, required, validate }) => input({ message, required: required ?? false, ...(validate ? { validate } : {}) }),
+  select: ({ message, choices, default: initial }) => select({ message, choices, default: initial }),
+  checkbox: ({ message, choices, required }) => checkbox({ message, choices, required }),
+};
+
+/** Creates a MADR file from answers in the terminal; a superseded ADR gets `superseded by` (targeted edit). */
+async function addCommand(target: string | null): Promise<number> {
+  if (!process.stdin.isTTY) throw new ArgsError(`${PROGRAM} add needs an interactive terminal.`);
+  const dir = await writableDecisionsDir(target);
+  const workspace = new Workspace(dir);
+  const files = await workspace.readAll();
+  const { adrs } = parseCollection(files);
+  const now = new Date();
+
+  let created: Awaited<ReturnType<typeof askNewAdr>>;
+  try {
+    created = await askNewAdr(terminalPrompter, { adrs, language: majorityLanguage(adrs), today: parisDate(now) }, nextAdrNumber(files.map((file) => file.name)));
+    const path = relative(process.cwd(), join(dir, created.fileName)) || created.fileName;
+    const supersedes = created.supersedes === null ? '' : ` (${created.supersedes.id} becomes "superseded by ${created.id}")`;
+    if (!(await confirm({ message: `Create ${path}${supersedes}?`, default: true }))) {
+      write(process.stdout, 'Nothing written.');
+      return 0;
+    }
+  } catch (error) {
+    // Ctrl+C during a question.
+    if (error instanceof Error && error.name === 'ExitPromptError') {
+      write(process.stdout, 'Cancelled: nothing written.');
+      return 130;
+    }
+    throw error;
+  }
+
+  const content = serializeMadr(created.draft);
+  const parsed = parseMadr(content, created.fileName);
+  if (parsed.adr === null || hasErrors(parsed.issues)) {
+    printIssues([{ file: created.fileName, issues: parsed.issues }], dir);
+    return 1;
+  }
+  await mkdir(dir, { recursive: true });
+  // `wx`: never overwrite a file created in the meantime.
+  await writeFile(join(dir, created.fileName), content, { encoding: 'utf8', flag: 'wx' });
+  write(process.stdout, `created  ${relative(process.cwd(), join(dir, created.fileName)) || created.fileName}`);
+  printIssues(parsed.issues.length > 0 ? [{ file: created.fileName, issues: parsed.issues }] : [], dir);
+
+  if (created.supersedes !== null) {
+    const old = files.find((file) => file.name === created.supersedes!.file);
+    if (old === undefined) throw new Error(`File of ${created.supersedes.id} not found: ${created.supersedes.file}`);
+    const updated = applyDecision(old.content, old.name, { status: 'remplacée', retained: [], comment: null, nextReview: null, replacedBy: created.id }, now);
+    await writeFile(join(dir, old.name), updated, 'utf8');
+    write(process.stdout, `updated  ${relative(process.cwd(), join(dir, old.name)) || old.name}  (superseded by ${created.id})`);
+  }
+  return 0;
+}
+
 async function main(argv: string[]): Promise<number> {
   const command = parseCommand(argv, process.env, process.cwd());
   switch (command.kind) {
@@ -234,6 +296,8 @@ async function main(argv: string[]): Promise<number> {
       return validate(command.paths);
     case 'import':
       return importCommand(command.input, command.dir, command.force);
+    case 'add':
+      return addCommand(command.dir);
     case 'review':
       await review(command.options);
       return 0;

@@ -13,12 +13,12 @@ test('runs a full review with the keyboard only', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Lancer la revue/u })).toBeVisible();
 
   await page.keyboard.press('r');
-  await expect(page.getByText('1 / 4')).toBeVisible();
+  await expect(page.getByText('1 / 5')).toBeVisible();
 
   // Validating without a selected proposition is impossible.
   await page.keyboard.press('v');
   await expect(page.getByText('Sélectionnez au moins une option').first()).toBeVisible();
-  await expect(page.getByText('1 / 4')).toBeVisible();
+  await expect(page.getByText('1 / 5')).toBeVisible();
 
   // ADR-0002: select P1 and P3, comment, validate.
   await page.keyboard.press('1');
@@ -36,23 +36,27 @@ test('runs a full review with the keyboard only', async ({ page }) => {
   expect(await read('0002-cache-http.md')).toContain('status: accepted');
 
   // ADR-0003 already names its option: it is preselected and its justification kept.
-  await expect(page.getByText('2 / 4')).toBeVisible();
+  await expect(page.getByText('2 / 5')).toBeVisible();
   await page.keyboard.press('v');
   await expect.poll(async () => read('0003-authentification.md')).toContain('Chosen option: "mTLS via le service mesh", because le mesh est déjà déployé sur tous les clusters.');
 
-  await expect(page.getByText('3 / 4')).toBeVisible();
+  await expect(page.getByText('3 / 5')).toBeVisible();
   await page.keyboard.press('x');
-  await expect(page.getByText('4 / 4')).toBeVisible();
+  await expect(page.getByText('4 / 5')).toBeVisible();
 
   // Undo the last decision (Ctrl+Z): we go back to it and the file is restored exactly.
   await page.keyboard.press('Control+z');
   await expect(page.getByText('Décision annulée sur ADR-0005')).toBeVisible();
-  await expect(page.getByText('3 / 4')).toBeVisible();
+  await expect(page.getByText('3 / 5')).toBeVisible();
   await expect.poll(async () => read('0005-observabilite.md')).toBe(deferred);
 
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('2');
   await page.keyboard.press('v');
+
+  // ADR-0010, the last proposed one: rejected without an option.
+  await expect(page.getByText('5 / 5')).toBeVisible();
+  await page.keyboard.press('x');
 
   await expect(page.getByRole('heading', { name: 'Récapitulatif' })).toBeVisible();
   await expect(page.getByText('Décisions prises')).toBeVisible();

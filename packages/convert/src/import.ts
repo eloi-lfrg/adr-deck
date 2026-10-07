@@ -1,6 +1,6 @@
 import mammoth from 'mammoth';
 import { HTMLElement, NodeType, parse, type Node } from 'node-html-parser';
-import { isMadrFileName, normalizeKey, serializeMadr, STATUSES, type Language, type MadrDraft, type Status } from '@adr/format';
+import { isMadrFileName, madrFileName, normalizeKey, serializeMadr, STATUSES, type Language, type MadrDraft, type Status } from '@adr/format';
 import { CODE_BLOCK_STYLE, EXPORT_LANGUAGES, INLINE_CODE_STYLE, LABELS, type Labels } from './styles.ts';
 
 /** A problem found in the .docx; `location` points to the ADR or section concerned. */
@@ -163,18 +163,6 @@ function list(text: string): string[] {
     .filter(Boolean);
 }
 
-function slug(text: string): string {
-  return (
-    text
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/gu, '-')
-      .replace(/^-+|-+$/gu, '')
-      .slice(0, 60) || 'decision'
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Document → ADR drafts
 
@@ -283,7 +271,7 @@ function readAdr(raw: RawAdr, issues: ImportIssue[]): Parsed | null {
     else draft.otherSections.push({ heading: section.heading, body: markdown(section.blocks) });
   }
 
-  const name = fileName !== null && isMadrFileName(fileName) ? fileName : `${match[1]!.padStart(4, '0')}-${slug(draft.title)}.md`;
+  const name = fileName !== null && isMadrFileName(fileName) ? fileName : madrFileName(match[1]!, draft.title);
   if (fileName !== null && !isMadrFileName(fileName)) issues.push({ location: id, message: `file name "${fileName}" is not NNNN-title.md: written as ${name}.` });
   return { id, fileName: name, draft };
 }

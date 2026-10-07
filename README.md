@@ -2,7 +2,7 @@
 
 A focused, well-paced review of ADRs (*Architecture Decision Records*): **one ADR per slide, one decision per click**, written straight into your project's [MADR](https://adr.github.io/madr/) files.
 
-It is a **local** web app, designed to be driven by one person sharing their screen during a meeting: run `adr-deck --review` in a project and the browser opens on its ADRs. No database: **the `NNNN-title.md` files are the single source of truth**.
+It is a **local** web app, designed to be driven by one person sharing their screen during a meeting: run `adr-deck` in a project and the browser opens on its ADRs. No database: **the `NNNN-title.md` files are the single source of truth**.
 
 ## Contents
 
@@ -37,12 +37,14 @@ With nvm, global packages belong to one Node version: `adr-deck` is available as
 
 ```sh
 cd ~/workspace/my-project
-adr-deck --review              # local server + opens the browser
+adr-deck                       # local server + opens the browser
 ```
 
 | Command | Purpose |
 | --- | --- |
-| `adr-deck --review [dir]` | Review the ADRs of the directory (default: current directory) |
+| `adr-deck [review] [dir]` | Review the ADRs of the directory (default: current directory) |
+| `adr-deck timeline [dir]` | Same app, opened on the timeline of the ADRs |
+| `adr-deck add [dir]` | Create a new ADR interactively (see [Creating ADRs](#creating-adrs)) |
 | `adr-deck export [output.docx]` | `.docx` of every ADR (default: `<project>-decisions.docx` in the current directory; English labels, or `--lang fr` / `--lang es`) |
 | `adr-deck import <file.docx> [dir]` | Turn a `.docx` exported by adr-deck (possibly edited in Word) back into MADR files |
 | `adr-deck validate [path…]` | Check MADR files or directories; exit code 1 on error |
@@ -63,9 +65,13 @@ The selected directory is shown at startup and at the top of the grid. Other `.m
 
 ### Review flow
 
-1. **Grid** — every ADR of the directory: status tabs with counters, full-text search, tag filter, sorting (number, date, status). Clicking a card opens the slideshow on that ADR. The dot in the corner of a card adds it to a selection. Unreadable files are listed in a collapsible notice (file, line, message) and left out of the review.
+1. **Grid** — every ADR of the directory: status tabs with counters, full-text search, tag filter, sorting (number, date newest first, status). Clicking a card opens the slideshow on that ADR. The dot in the corner of a card adds it to a selection. Unreadable files are listed in a collapsible notice (file, line, message) and left out of the review.
 2. **Slideshow** — “Start the review” (or `R`) switches to full screen. For each ADR: read the context and the decision drivers, select one or more options, then **Accept**, **Reject** or **Defer**, with an optional comment and next review date. The next slide comes after 1.2 s (auto advance can be turned off); the file is saved in the background.
 3. **Summary** — at the end: session counters, decisions made with their comments, `.docx` export.
+
+### Timeline
+
+`adr-deck timeline` (or `T` from the grid, or the `Ctrl+K` palette) shows every ADR on a vertical timeline, to read the history of the decisions rather than to decide. ADRs are placed at their decision date (or else their front matter `date`), grouped by year and month; undated ones come last. Each entry shows its status, the chosen (or recommended) options and the justification; **Read** (`Enter`) unfolds the whole ADR — context, drivers, options with their pros and cons, outcome details, people involved — and opens it in the slideshow if needed. Status filters, newest first by default (or oldest first), expand all (`A`). The spine fills up as you scroll; links between superseding and superseded ADRs move along the timeline. `/timeline?at=ADR-0007` opens on an ADR.
 
 ### Slideshow modes
 
@@ -116,7 +122,7 @@ The UI language also applies to format messages (grid notice) and to the labels 
 
 ## Keyboard shortcuts
 
-`?` shows the shortcuts help in the slideshow.
+`?` shows the shortcuts help in the slideshow and the timeline.
 
 | Key | Action |
 | --- | --- |
@@ -135,6 +141,10 @@ The UI language also applies to format messages (grid notice) and to the labels 
 | `Esc` | Close the panel or leave the slideshow |
 | `R` (grid) | Start the review |
 | `/` (grid) | Search |
+| `T` (grid) | Timeline |
+| `↑` / `↓` or `J` / `K` (timeline) | Previous / next ADR |
+| `Enter` (timeline) | Read / collapse the ADR |
+| `A` (timeline) | Expand / collapse all |
 | `E` (summary) | Export to `.docx` |
 
 ## The MADR format
@@ -247,6 +257,7 @@ The rest of the file is kept byte for byte, CRLF line endings included. Undoing 
 
 ## Creating ADRs
 
+- **Interactively**: `adr-deck add` asks every field in the terminal — title, context, decision drivers, options with their description and pros and cons, status (`proposed` by default, picked from a list), chosen or recommended options, justification, decision makers, consulted, informed, tags, more information — then, last, the number of the ADR it supersedes (empty: none). The file gets the next number (`NNNN-title.md`), today's date (Europe/Paris) and the heading language of most ADRs of the directory (English otherwise). A superseded ADR gets `status: superseded by ADR-NNNN` (targeted edit, like a decision) and the new one says so in « More Information ». Nothing is written before the final confirmation.
 - **By hand**: copy `templates/madr.md` to `docs/decisions/NNNN-title.md`.
 - **From a `.docx` exported by adr-deck**: `adr-deck import review.docx` (see [Import](#import)).
 - **From any source** (meeting notes, PDF, Word, discussion thread): the repository's Claude Code skill `adr-extract` produces validated MADR files, without making anything up:
@@ -323,8 +334,8 @@ ADR_WORKSPACE=~/workspace/my-project npm run dev
 | `@adr/format` | MADR reading (English, French, no front matter, code blocks), statuses, decisions, byte-for-byte undo on every example, collection (order, duplicates, supersede links), MADR writing |
 | `@adr/convert` | `.docx` export, en/fr/es labels; export then import gives back every example and a rich ADR (markdown, code, outcome subsections, metadata) |
 | `@adr/server` | Directory lookup, API, revision conflicts, backups, directory watching |
-| `@adr/web` | Per-file write queue and replay on conflict, Markdown rendering, i18n (detection, complete catalogs, dates); e2e: full keyboard review, hot reload, navigation to the replacement ADR, browser language and language switch |
-| `adr-deck` | CLI arguments; `npm run test:package` installs the tarball and tests `--review`, `validate`, `export` and `import` |
+| `@adr/web` | Per-file write queue and replay on conflict, timeline order and grouping, Markdown rendering, i18n (detection, complete catalogs, dates); e2e: full keyboard review, timeline (reading, links, filters, deep link), hot reload, navigation to the replacement ADR, browser language and language switch |
+| `adr-deck` | CLI arguments, `add` questions (scripted answers); `npm run test:package` installs the tarball and tests `review`, `validate`, `export` and `import` |
 
 Before shipping: `npm run check`, `npm run test:e2e:chrome` for any UI change, `npm run test:package` for the CLI.
 
@@ -343,6 +354,7 @@ Before shipping: `npm run check`, `npm run test:e2e:chrome` for any UI change, `
 | `npm run validate:example` | Check `examples/decisions` |
 | `npm run export -- [output.docx] [--dir <dir>] [--lang <en\|fr\|es>]` | `.docx` export |
 | `npm run import -- <file.docx> [dir] [--force]` | `.docx` → MADR files |
+| `npm run add -- [dir]` | Create an ADR interactively |
 | `npm run install:global` | Build and install `adr-deck` globally |
 | `npm run uninstall:global` | Uninstall `adr-deck` |
 | `npm run build:package` | Build the `adr-deck` npm package (front end + bundled CLI) |
@@ -363,8 +375,8 @@ adr-deck/
 ├── packages/
 │   ├── format/           @adr/format: MADR reading and writing, statuses, targeted edits (decision, undo), collection
 │   ├── convert/          @adr/convert: .docx export and import
-│   └── adr-deck/         npm package: “adr-deck” CLI (--review, export, import, validate), esbuild bundle, tarball test
-├── examples/decisions/   9 MADR ADRs covering every status
+│   └── adr-deck/         npm package: “adr-deck” CLI (review, add, export, import, validate), esbuild bundle, tarball test
+├── examples/decisions/   15 MADR ADRs covering every status
 ├── templates/madr.md     ADR template
 ├── .claude/skills/       adr-extract skill
 └── workspace/            development directory (ignored by git)

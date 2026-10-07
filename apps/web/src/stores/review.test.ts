@@ -31,8 +31,8 @@ describe('review store', () => {
     const store = useReviewStore();
     await store.load();
     expect(store.title).toBe('Projet');
-    expect(store.adrs.map((adr) => adr.id)).toEqual(['ADR-0001', 'ADR-0002', 'ADR-0003', 'ADR-0004', 'ADR-0005', 'ADR-0006', 'ADR-0007', 'ADR-0008', 'ADR-0009']);
-    expect(store.counts['à décider']).toBe(3);
+    expect(store.adrs.map((adr) => adr.id)).toEqual(Array.from({ length: 15 }, (_, index) => `ADR-${String(index + 1).padStart(4, '0')}`));
+    expect(store.counts['à décider']).toBe(4);
     expect(store.issues).toEqual([]);
   });
 

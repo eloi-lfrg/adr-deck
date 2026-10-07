@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 import { toast } from 'vue-sonner';
-import { FileDown, Languages, LayoutGrid, Palette, Play } from '@lucide/vue';
+import { FileDown, GitCommitVertical, Languages, LayoutGrid, Palette, Play } from '@lucide/vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import {
   CommandDialog,
@@ -62,6 +62,9 @@ async function exportDocx(): Promise<void> {
         </CommandItem>
         <CommandItem value="action-grid" @select="run(() => router.push({ name: 'grid' }))">
           <LayoutGrid /> {{ m.palette.grid }} <CommandShortcut>G</CommandShortcut>
+        </CommandItem>
+        <CommandItem value="action-timeline" @select="run(() => router.push({ name: 'timeline' }))">
+          <GitCommitVertical /> {{ m.palette.timeline }} <CommandShortcut>T</CommandShortcut>
         </CommandItem>
         <CommandItem value="action-export" @select="run(() => void exportDocx())">
           <FileDown /> {{ m.palette.export }}

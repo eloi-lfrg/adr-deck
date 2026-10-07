@@ -79,6 +79,12 @@ describe('ADR API', () => {
       '0007-orm.md',
       '0008-drizzle.md',
       '0009-ie11.md',
+      '0010-revue-avec-adr-deck.md',
+      '0011-typescript-strict.md',
+      '0012-deploiement-continu.md',
+      '0013-feature-flags-maison.md',
+      '0014-api-graphql.md',
+      '0015-api-rest-openapi.md',
     ]);
   });
 

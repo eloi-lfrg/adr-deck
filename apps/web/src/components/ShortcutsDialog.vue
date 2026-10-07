@@ -5,11 +5,33 @@ import { Kbd } from '@/components/ui/kbd';
 import { useI18n } from '@/i18n';
 
 const open = defineModel<boolean>('open', { required: true });
+const props = withDefaults(defineProps<{ variant?: 'slideshow' | 'timeline' }>(), { variant: 'slideshow' });
 
 const { m } = useI18n();
 
 const groups = computed<{ title: string; items: [string[], string][] }[]>(() => {
   const k = m.value.shortcuts;
+  if (props.variant === 'timeline') {
+    return [
+      {
+        title: k.timeline,
+        items: [
+          [['↑', '↓'], k.move],
+          [['J', 'K'], k.move],
+          [[k.enter], k.read],
+          [['A'], k.readAll],
+        ],
+      },
+      {
+        title: k.navigation,
+        items: [
+          [['G'], k.grid],
+          [['Ctrl', 'K'], m.value.header.search],
+          [[k.escape], k.grid],
+        ],
+      },
+    ];
+  }
   return [
     {
       title: k.navigation,
@@ -18,6 +40,7 @@ const groups = computed<{ title: string; items: [string[], string][] }[]>(() => 
         [['L'], k.follow],
         [['S'], k.contents],
         [['G'], k.grid],
+        [['T'], k.openTimeline],
         [['F'], k.fullscreen],
         [[k.escape], k.close],
       ],
