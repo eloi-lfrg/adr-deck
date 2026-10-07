@@ -26,6 +26,10 @@ Six mois après le lancement de l'API GraphQL (ADR-0014), les intégrateurs l'ut
 
 Chosen option: "REST et OpenAPI", because la spécification OpenAPI produit à la fois la documentation, les SDK et les tests de contrat.
 
+### Confirmation
+
+Les tests de contrat générés depuis la spécification OpenAPI tournent à chaque pull request.
+
 ## Pros and Cons of the Options
 
 ### REST et OpenAPI

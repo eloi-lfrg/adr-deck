@@ -1,6 +1,6 @@
 import mammoth from 'mammoth';
 import { HTMLElement, NodeType, parse, type Node } from 'node-html-parser';
-import { isMadrFileName, madrFileName, normalizeKey, serializeMadr, STATUSES, type Language, type MadrDraft, type Status } from '@adr/format';
+import { isMadrPath, madrFileName, normalizeKey, serializeMadr, STATUSES, type Language, type MadrDraft, type Status } from '@adr/format';
 import { CODE_BLOCK_STYLE, EXPORT_LANGUAGES, INLINE_CODE_STYLE, LABELS, type Labels } from './styles.ts';
 
 /** A problem found in the .docx; `location` points to the ADR or section concerned. */
@@ -70,11 +70,12 @@ const SECTIONS = labelTable<SectionKey>(['context', 'drivers', 'options', 'decis
 const STATUS_LABELS = new Map<string, Status>();
 for (const language of EXPORT_LANGUAGES) for (const status of STATUSES) STATUS_LABELS.set(normalizeKey(LABELS[language].statuses[status]), status);
 
-/** `Pro: …` / `Pour : …` / `A favor: …` bullets of an option. */
-const ARGUMENT_PREFIXES: [RegExp, 'pros' | 'cons'][] = EXPORT_LANGUAGES.flatMap((language) => [
-  [new RegExp(`^${escape(LABELS[language].pros)}\\s*:\\s*`, 'iu'), 'pros'] as [RegExp, 'pros'],
-  [new RegExp(`^${escape(LABELS[language].cons)}\\s*:\\s*`, 'iu'), 'cons'] as [RegExp, 'cons'],
-]);
+type ArgumentKind = 'pros' | 'cons' | 'neutral';
+
+/** `Pro: …` / `Pour : …` / `A favor: …` (and `Con`, `Neutral`) bullets of an option. */
+const ARGUMENT_PREFIXES: [RegExp, ArgumentKind][] = EXPORT_LANGUAGES.flatMap((language) =>
+  (['pros', 'cons', 'neutral'] as const).map((kind): [RegExp, ArgumentKind] => [new RegExp(`^${escape(LABELS[language][kind])}\\s*:\\s*`, 'iu'), kind]),
+);
 
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
@@ -271,16 +272,17 @@ function readAdr(raw: RawAdr, issues: ImportIssue[]): Parsed | null {
     else draft.otherSections.push({ heading: section.heading, body: markdown(section.blocks) });
   }
 
-  const name = fileName !== null && isMadrFileName(fileName) ? fileName : madrFileName(match[1]!, draft.title);
-  if (fileName !== null && !isMadrFileName(fileName)) issues.push({ location: id, message: `file name "${fileName}" is not NNNN-title.md: written as ${name}.` });
+  // The file may sit in a category folder (`backend/0003-x.md`).
+  const name = fileName !== null && isMadrPath(fileName) ? fileName : madrFileName(match[1]!, draft.title);
+  if (fileName !== null && !isMadrPath(fileName)) issues.push({ location: id, message: `file name "${fileName}" is not NNNN-title.md: written as ${name}.` });
   return { id, fileName: name, draft };
 }
 
 function readOptions(blocks: HTMLElement[], draft: Omit<MadrDraft, 'language'>): void {
-  const options: { title: string; body: string[]; pros: string[]; cons: string[] }[] = [];
+  const options: { title: string; body: string[]; pros: string[]; cons: string[]; neutral: string[] }[] = [];
   for (const node of blocks) {
     if (node.tagName === 'H4') {
-      options.push({ title: node.text.trim().replace(/^P\d+\s*[·•:–—-]\s*/u, ''), body: [], pros: [], cons: [] });
+      options.push({ title: node.text.trim().replace(/^P\d+\s*[·•:–—-]\s*/u, ''), body: [], pros: [], cons: [], neutral: [] });
       continue;
     }
     const current = options.at(-1);
@@ -300,7 +302,7 @@ function readOptions(blocks: HTMLElement[], draft: Omit<MadrDraft, 'language'>):
     }
     if (others.length > 0) current.body.push(others.join('\n'));
   }
-  draft.propositions = options.map(({ title, body, pros, cons }) => ({ title, body: body.filter(Boolean).join('\n\n'), pros, cons }));
+  draft.propositions = options.map(({ title, body, pros, cons, neutral }) => ({ title, body: body.filter(Boolean).join('\n\n'), pros, cons, neutral }));
 }
 
 function readDecision(

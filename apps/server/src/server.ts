@@ -17,6 +17,8 @@ export interface StartServerOptions {
   backupDir?: string;
   /** Directory of the built front; when set, the server also serves the web app. */
   webDist?: string;
+  /** Refuses every write (see `createApp`). */
+  readOnly?: boolean;
 }
 
 export interface RunningServer {
@@ -32,7 +34,7 @@ export async function startServer(options: StartServerOptions): Promise<RunningS
     process.stderr.write(`[watch] ${error.message}\n`);
   });
 
-  const app = createApp({ workspace, title: options.title });
+  const app = createApp({ workspace, title: options.title, readOnly: options.readOnly ?? false });
   if (options.webDist !== undefined) {
     const webDist = options.webDist;
     const indexHtml = await readFile(join(webDist, 'index.html'), 'utf8');

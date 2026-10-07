@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia';
-import { computed, ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import {
   applyOperation,
+  categoryOf,
   DecisionError,
   parseCollection,
   snapshotOf,
@@ -13,27 +14,44 @@ import {
   type DecisionSnapshot,
   type DocumentOperation,
   type FileIssues,
+  type Participants,
+  type ReworkInput,
   type Status,
 } from '@adr/format';
 import { t } from '@/i18n';
 import { api, ApiError, type FileContent } from '@/lib/api';
+import { readStored, writeStored } from '@/lib/storage';
 
 export const SAVE_DEBOUNCE_MS = 400;
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
+/** What a review did to an ADR: a status, or `rework` (sent back, still proposed, with actions). */
+export type SessionOutcome = Status | 'rework';
+
 export interface SessionDecision {
   adrId: string;
   title: string;
-  status: Status;
+  outcome: SessionOutcome;
   retained: string[];
   comment: string | null;
+  /** Actions of a rework. */
+  actions: string[];
   at: string;
 }
 
+/** One undoable step: the files it changed (two for a supersede), each with its content before. */
 interface UndoEntry {
   adrId: string;
-  snapshot: DecisionSnapshot;
+  snapshots: { adrId: string; snapshot: DecisionSnapshot }[];
+}
+
+export type ParticipantRole = 'decider' | 'consulted';
+
+/** Someone attending the review; written into `decision-makers` or `consulted` of each ADR decided. */
+export interface Participant {
+  name: string;
+  role: ParticipantRole;
 }
 
 /** A MADR file as confirmed by the server, plus the local operations not yet written. */
@@ -62,6 +80,15 @@ function replay(name: string, base: string, operations: DocumentOperation[]): { 
   return { content, kept, dropped: operations.length - kept.length };
 }
 
+function isParticipant(value: unknown): value is Participant {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Participant).name === 'string' &&
+    ((value as Participant).role === 'decider' || (value as Participant).role === 'consulted')
+  );
+}
+
 export const useReviewStore = defineStore('review', () => {
   const title = ref('');
   const dir = ref('');
@@ -78,9 +105,15 @@ export const useReviewStore = defineStore('review', () => {
   const externalChecks = new Set<string>();
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
+  const readOnly = ref(false);
   const sessionDecisions = ref<SessionDecision[]>([]);
   const undoStack = ref<UndoEntry[]>([]);
+  const participants = ref<Participant[]>([]);
   let events: EventSource | null = null;
+
+  // Participants belong to a meeting: kept for the browser tab (reloads included), per decisions directory.
+  const participantsKey = (): string => `adr-deck:participants:${dir.value}`;
+  watch(participants, (value) => writeStored(participantsKey(), value, 'session'), { deep: true });
 
   const collection = computed<Collection>(() => parseCollection([...files.value.values()].map((file) => ({ name: file.name, content: file.content }))));
   const adrs = computed<Adr[]>(() => collection.value.adrs);
@@ -93,6 +126,16 @@ export const useReviewStore = defineStore('review', () => {
     return result;
   });
   const allTags = computed<string[]>(() => [...new Set(adrs.value.flatMap((adr) => adr.tags))].sort((a, b) => a.localeCompare(b, 'fr')));
+  /** Category folders of the decisions directory. */
+  const categories = computed<string[]>(() =>
+    [...new Set(adrs.value.map((adr) => categoryOf(adr.file)).filter((folder): folder is string => folder !== null))].sort((a, b) => a.localeCompare(b, 'fr')),
+  );
+  /** Everyone named in the ADRs (decision makers, consulted, informed), to pick participants quickly. */
+  const knownPeople = computed<string[]>(() => {
+    const names = new Map<string, string>();
+    for (const adr of adrs.value) for (const name of [...adr.deciders, ...adr.consulted, ...adr.informed]) names.set(name.toLowerCase(), names.get(name.toLowerCase()) ?? name);
+    return [...names.values()].sort((a, b) => a.localeCompare(b, 'fr'));
+  });
   const hasPendingChanges = computed(() => saveState.value === 'saving' || saveState.value === 'error');
 
   function adrById(id: string): Adr | undefined {
@@ -145,6 +188,9 @@ export const useReviewStore = defineStore('review', () => {
       const response = await api.listAdrs();
       title.value = response.title;
       dir.value = response.dir;
+      readOnly.value = response.readOnly === true;
+      const stored = readStored<unknown>(participantsKey(), [], 'session');
+      participants.value = Array.isArray(stored) ? stored.filter(isParticipant) : [];
       commit(new Map(response.files.map((file) => [file.name, { name: file.name, base: file.content, revision: file.revision, operations: [], content: file.content }])));
       loaded.value = true;
     } catch (error) {
@@ -282,40 +328,108 @@ export const useReviewStore = defineStore('review', () => {
     void flushNow();
   }
 
-  function apply(adrId: string, operation: DocumentOperation): void {
+  function fileOf(adrId: string): FileState {
     const adr = adrById(adrId);
-    if (!adr) throw new DecisionError('unknownAdr', { adr: adrId }, `ADR not found: ${adrId}.`);
-    updateFile(adr.file, (file) => ({ ...file, content: applyOperation(file.content, file.name, operation), operations: [...file.operations, operation] }));
-    scheduleSave();
+    const file = adr === undefined ? undefined : files.value.get(adr.file);
+    if (!adr || !file) throw new DecisionError('unknownAdr', { adr: adrId }, `ADR not found: ${adrId}.`);
+    return file;
   }
 
-  function record(adrId: string, at: string): void {
+  /**
+   * Applies operations to their files at once (optimistic) and queues the writes. Every operation is checked before
+   * any file changes, so a refused one leaves everything as it was. Returns the undo entry.
+   */
+  function applyAll(operations: DocumentOperation[]): UndoEntry {
+    if (readOnly.value) throw new Error(t().api.codes['readOnly']);
+    const changes = operations.map((operation) => {
+      const file = fileOf(operation.adrId);
+      return { operation, file, snapshot: snapshotOf(file.content), content: applyOperation(file.content, file.name, operation) };
+    });
+    for (const { operation, file, content } of changes) {
+      updateFile(file.name, (current) => ({ ...current, content, operations: [...current.operations, operation] }));
+    }
+    scheduleSave();
+    return { adrId: operations[0]!.adrId, snapshots: changes.map(({ operation, snapshot }) => ({ adrId: operation.adrId, snapshot })) };
+  }
+
+  function record(adrId: string, at: string, outcome?: SessionOutcome, actions: string[] = []): void {
     const adr = adrById(adrId)!;
     sessionDecisions.value = [
       ...sessionDecisions.value.filter((entry) => entry.adrId !== adrId),
-      { adrId, title: adr.title, status: adr.status, retained: adr.decision?.retained ?? [], comment: adr.decision?.comment ?? null, at },
+      { adrId, title: adr.title, outcome: outcome ?? adr.status, retained: adr.decision?.retained ?? [], comment: adr.decision?.comment ?? null, actions, at },
     ];
+  }
+
+  /** The participants of the review, as written into the files (none: the people metadata is left alone). */
+  function participantsInput(): Participants | undefined {
+    if (participants.value.length === 0) return undefined;
+    const names = (role: ParticipantRole): string[] => participants.value.filter((person) => person.role === role).map((person) => person.name);
+    return { deciders: names('decider'), consulted: names('consulted') };
+  }
+
+  function withParticipants<T extends { participants?: Participants }>(input: T): T {
+    const people = participantsInput();
+    return people === undefined || input.participants !== undefined ? input : { ...input, participants: people };
   }
 
   /** Records a decision (optimistic) and queues the write. Throws DecisionError on invalid input. */
   function decide(adrId: string, input: DecisionInput): void {
-    const adr = adrById(adrId);
-    if (!adr) throw new DecisionError('unknownAdr', { adr: adrId }, `ADR not found: ${adrId}.`);
-    const snapshot = snapshotOf(files.value.get(adr.file)!.content);
     const at = new Date().toISOString();
-    apply(adrId, { kind: 'decide', adrId, input, at });
-    undoStack.value.push({ adrId, snapshot });
+    undoStack.value.push(applyAll([{ kind: 'decide', adrId, input: withParticipants(input), at }]));
     record(adrId, at);
   }
 
-  /** Undoes the last decision of the session; returns the ADR concerned. */
+  /** Sends an ADR back for rework: it stays proposed, with follow-up actions in « More Information ». */
+  function rework(adrId: string, actions: string[]): void {
+    const at = new Date().toISOString();
+    undoStack.value.push(applyAll([{ kind: 'rework', adrId, input: withParticipants<ReworkInput>({ actions }), at }]));
+    record(adrId, at, 'rework', actions.map((action) => action.trim()).filter(Boolean));
+  }
+
+  /** Marks an ADR superseded by another one and notes it in both files (one undo step). */
+  function supersede(adrId: string, replacedBy: string, comment: string | null): void {
+    const replaced = adrById(adrId);
+    if (!replaced) throw new DecisionError('unknownAdr', { adr: adrId }, `ADR not found: ${adrId}.`);
+    const at = new Date().toISOString();
+    undoStack.value.push(
+      applyAll([
+        { kind: 'decide', adrId, input: withParticipants<DecisionInput>({ status: 'remplacée', retained: [], comment, nextReview: null, replacedBy }), at },
+        { kind: 'supersedes', adrId: replacedBy, replaced: adrId, title: replaced.title, at },
+      ]),
+    );
+    record(adrId, at);
+  }
+
+  /** Marks an accepted ADR deprecated, keeping its decision. */
+  function deprecate(adrId: string, comment: string | null): void {
+    const at = new Date().toISOString();
+    undoStack.value.push(applyAll([{ kind: 'decide', adrId, input: withParticipants<DecisionInput>({ status: 'obsolète', retained: [], comment, nextReview: null, replacedBy: null }), at }]));
+    record(adrId, at);
+  }
+
+  /** Undoes the last step of the session (every file it changed); returns the ADR concerned. */
   function undo(): string | null {
     const entry = undoStack.value.pop();
     if (!entry) return null;
-    apply(entry.adrId, { kind: 'undo', adrId: entry.adrId, restore: entry.snapshot, at: new Date().toISOString() });
+    const at = new Date().toISOString();
+    applyAll(entry.snapshots.map(({ adrId, snapshot }): DocumentOperation => ({ kind: 'undo', adrId, restore: snapshot, at })));
     sessionDecisions.value = sessionDecisions.value.filter((item) => item.adrId !== entry.adrId);
-    if (undoStack.value.some((item) => item.adrId === entry.adrId)) record(entry.adrId, new Date().toISOString());
+    if (undoStack.value.some((item) => item.adrId === entry.adrId)) record(entry.adrId, at);
     return entry.adrId;
+  }
+
+  function addParticipant(name: string, role: ParticipantRole = 'decider'): void {
+    const clean = name.replace(/\s+/gu, ' ').trim();
+    if (clean === '' || participants.value.some((person) => person.name.toLowerCase() === clean.toLowerCase())) return;
+    participants.value = [...participants.value, { name: clean, role }];
+  }
+
+  function setParticipantRole(name: string, role: ParticipantRole): void {
+    participants.value = participants.value.map((person) => (person.name === name ? { ...person, role } : person));
+  }
+
+  function removeParticipant(name: string): void {
+    participants.value = participants.value.filter((person) => person.name !== name);
   }
 
   /** Raw content currently shown for a file (for tests and debugging views). */
@@ -326,6 +440,7 @@ export const useReviewStore = defineStore('review', () => {
   return {
     title,
     dir,
+    readOnly,
     loaded,
     loading,
     loadError,
@@ -338,12 +453,21 @@ export const useReviewStore = defineStore('review', () => {
     replaces,
     counts,
     allTags,
+    categories,
+    knownPeople,
+    participants,
     hasPendingChanges,
     adrById,
     contentOf,
     load,
     decide,
+    rework,
+    supersede,
+    deprecate,
     undo,
+    addParticipant,
+    setParticipantRole,
+    removeParticipant,
     retrySave,
     flushNow,
     reloadFile,

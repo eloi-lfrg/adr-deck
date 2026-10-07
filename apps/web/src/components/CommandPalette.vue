@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 import { toast } from 'vue-sonner';
-import { FileDown, GitCommitVertical, Languages, LayoutGrid, Palette, Play } from '@lucide/vue';
+import { FileDown, GitCommitVertical, Languages, LayoutGrid, Palette, Play, Users } from '@lucide/vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import {
   CommandDialog,
@@ -19,7 +19,9 @@ import { usePreferencesStore } from '@/stores/preferences';
 import { useReviewStore } from '@/stores/review';
 
 const open = defineModel<boolean>('open', { required: true });
-const emit = defineEmits<{ selectAdr: [id: string]; launch: [] }>();
+/** `participants`: the view handles the « Participants » action (grid and slideshow). */
+const props = withDefaults(defineProps<{ participants?: boolean }>(), { participants: false });
+const emit = defineEmits<{ selectAdr: [id: string]; launch: []; participants: [] }>();
 
 const router = useRouter();
 const review = useReviewStore();
@@ -65,6 +67,9 @@ async function exportDocx(): Promise<void> {
         </CommandItem>
         <CommandItem value="action-timeline" @select="run(() => router.push({ name: 'timeline' }))">
           <GitCommitVertical /> {{ m.palette.timeline }} <CommandShortcut>T</CommandShortcut>
+        </CommandItem>
+        <CommandItem v-if="props.participants && !review.readOnly" value="action-participants" @select="run(() => emit('participants'))">
+          <Users /> {{ m.palette.participants }} <CommandShortcut>{{ review.participants.length || '' }}</CommandShortcut>
         </CommandItem>
         <CommandItem value="action-export" @select="run(() => void exportDocx())">
           <FileDown /> {{ m.palette.export }}

@@ -1,10 +1,13 @@
-import { DATE_PATTERN, madrFileName, statusValue, type Adr, type Language, type MadrDraft, type Status } from '@adr/format';
+import { DATE_PATTERN, findSimilarAdrs, madrFileName, statusValue, type Adr, type Language, type MadrDraft, type SimilarAdr, type Status } from '@adr/format';
 
 /** The questions `adr-deck add` asks; the CLI answers them in the terminal, tests with scripted answers. */
 export interface Prompter {
   text(question: { message: string; required?: boolean; validate?: (value: string) => string | true }): Promise<string>;
   select<T extends string>(question: { message: string; choices: Choice<T>[]; default: T }): Promise<T>;
   checkbox(question: { message: string; choices: Choice<number>[]; required: boolean }): Promise<number[]>;
+  confirm(question: { message: string; default: boolean }): Promise<boolean>;
+  /** Shows information between two questions. */
+  notice(message: string): void;
 }
 
 export interface Choice<T> {
@@ -20,10 +23,17 @@ export interface AddContext {
   language: Language;
   /** Today in Europe/Paris, `YYYY-MM-DD`. */
   today: string;
+  /** `minimal`: the questions of the MADR minimal template (context, options, outcome, consequences). */
+  template?: 'full' | 'minimal';
+  /** Category folders of the directory, offered when no `category` is given. */
+  categories?: string[];
+  /** Category folder imposed by `--category`; `''` = top level. */
+  category?: string | null;
 }
 
 export interface NewAdr {
   id: string;
+  /** Path relative to the decisions directory, category folder included. */
   fileName: string;
   draft: MadrDraft;
   /** The ADR the new one supersedes, or null. */
@@ -70,22 +80,58 @@ function optional(text: string): string | null {
   return value === '' ? null : value;
 }
 
-/** Asks every field of a MADR file, then whether the new ADR supersedes an existing one. */
-export async function askNewAdr(prompter: Prompter, context: AddContext, number: number): Promise<NewAdr> {
+/** Lists the existing ADRs close to the new one; true when the author still wants to create it. */
+async function checkDuplicates(prompter: Prompter, similar: SimilarAdr[]): Promise<boolean> {
+  if (similar.length === 0) return true;
+  const lines = similar.map(({ adr, score, shared }) => `  ${adr.id}  ${adr.title}  [${statusValue(adr.status, adr.decision?.replacedBy ?? null)}]  ${Math.round(score * 100)}% · ${shared.slice(0, 5).join(', ')}`);
+  prompter.notice(`Existing ADRs on a close subject — is this debate already settled?\n${lines.join('\n')}`);
+  return prompter.confirm({ message: 'Create a new ADR anyway?', default: true });
+}
+
+const CONSEQUENCES_HEADING: Record<Language, string> = { en: 'Consequences', fr: 'Conséquences' };
+const ARGUMENT: Record<Language, { good: string; bad: string }> = {
+  en: { good: 'Good, because', bad: 'Bad, because' },
+  fr: { good: 'Bon, car', bad: 'Mauvais, car' },
+};
+
+/**
+ * Asks every field of a MADR file (or only those of the minimal template), then whether the new ADR supersedes an
+ * existing one. Returns null when the author gives up after seeing ADRs on a close subject.
+ */
+export async function askNewAdr(prompter: Prompter, context: AddContext, number: number): Promise<NewAdr | null> {
+  const minimal = context.template === 'minimal';
   const id = `ADR-${String(number).padStart(4, '0')}`;
   const title = (await prompter.text({ message: `${id} title`, required: true })).trim();
   const contextText = (await prompter.text({ message: 'Context and problem statement', required: true })).trim();
-  const drivers = await askList(prompter, (index) => `Decision driver ${index}: a criterion the options are judged on (empty to finish)`);
+  if (!(await checkDuplicates(prompter, findSimilarAdrs(context.adrs, { title, context: contextText })))) return null;
+
+  let category = context.category ?? null;
+  if (context.category === undefined && (context.categories ?? []).length > 0) {
+    const TOP = '\0';
+    const picked = await prompter.select<string>({
+      message: 'Category (folder)',
+      default: TOP,
+      choices: [{ name: '(top level)', value: TOP }, ...(context.categories ?? []).map((folder) => ({ name: folder, value: folder }))],
+    });
+    category = picked === TOP ? null : picked;
+  }
+
+  const drivers = minimal ? [] : await askList(prompter, (index) => `Decision driver ${index}: a criterion the options are judged on (empty to finish)`);
 
   const propositions: MadrDraft['propositions'] = [];
   for (;;) {
     const optionTitle = (await prompter.text({ message: `Option ${propositions.length + 1} (empty to finish)` })).trim();
     if (optionTitle === '') break;
     if (propositions.some((proposition) => proposition.title === optionTitle)) continue;
+    if (minimal) {
+      propositions.push({ title: optionTitle, body: '', pros: [], cons: [], neutral: [] });
+      continue;
+    }
     const body = (await prompter.text({ message: `  "${optionTitle}": description (optional)` })).trim();
     const pros = await askList(prompter, () => `  "${optionTitle}": Good, because… (empty to finish)`);
+    const neutral = await askList(prompter, () => `  "${optionTitle}": Neutral, because… (empty to finish)`);
     const cons = await askList(prompter, () => `  "${optionTitle}": Bad, because… (empty to finish)`);
-    propositions.push({ title: optionTitle, body, pros, cons });
+    propositions.push({ title: optionTitle, body, pros, cons, neutral });
   }
 
   const status = await prompter.select<Status>({
@@ -112,22 +158,40 @@ export async function askNewAdr(prompter: Prompter, context: AddContext, number:
       : null;
   const comment = optional(await prompter.text({ message: 'Justification: why this status (optional)' }));
 
-  const deciders = splitList(await prompter.text({ message: 'Decision makers: who decides (comma-separated, optional)' }));
-  const consulted = splitList(await prompter.text({ message: 'Consulted: whose opinion is asked before deciding (comma-separated, optional)' }));
-  const informed = splitList(await prompter.text({ message: 'Informed: who is told once it is decided (comma-separated, optional)' }));
-  const tags = splitList(await prompter.text({ message: 'Tags (comma-separated, optional)' }));
-  const moreInfo = (await prompter.text({ message: 'More information: links, follow-up, when to revisit (optional)' })).trim();
+  // « Decision Outcome » subsections of the MADR template, for the chosen (or recommended) options.
+  const outcome: string[] = [];
+  if (chosen.length > 0) {
+    const { good, bad } = ARGUMENT[context.language];
+    const goods = await askList(prompter, () => 'Consequence: Good, because… (empty to finish)');
+    const bads = await askList(prompter, () => 'Consequence: Bad, because… (empty to finish)');
+    if (goods.length + bads.length > 0) {
+      outcome.push(`### ${CONSEQUENCES_HEADING[context.language]}`, [...goods.map((text) => `* ${good} ${text}`), ...bads.map((text) => `* ${bad} ${text}`)].join('\n'));
+    }
+    if (!minimal) {
+      const confirmation = (await prompter.text({ message: 'Confirmation: how the implementation will be checked — review, test, fitness function (optional)' })).trim();
+      if (confirmation !== '') outcome.push('### Confirmation', confirmation);
+    }
+  }
 
-  const supersedesAnswer = await prompter.text({
-    message: 'Supersedes ADR number (empty = none)',
-    validate: (value) => value.trim() === '' || findAdrByNumber(context.adrs, value) !== null || `No ADR numbered "${value.trim()}" in this directory.`,
-  });
+  const deciders = minimal ? [] : splitList(await prompter.text({ message: 'Decision makers: who decides (comma-separated, optional)' }));
+  const consulted = minimal ? [] : splitList(await prompter.text({ message: 'Consulted: whose opinion is asked before deciding (comma-separated, optional)' }));
+  const informed = minimal ? [] : splitList(await prompter.text({ message: 'Informed: who is told once it is decided (comma-separated, optional)' }));
+  const tags = minimal ? [] : splitList(await prompter.text({ message: 'Tags (comma-separated, optional)' }));
+  const moreInfo = minimal ? '' : (await prompter.text({ message: 'More information: links, follow-up, when to revisit (optional)' })).trim();
+
+  const supersedesAnswer = minimal
+    ? ''
+    : await prompter.text({
+        message: 'Supersedes ADR number (empty = none)',
+        validate: (value) => value.trim() === '' || findAdrByNumber(context.adrs, value) !== null || `No ADR numbered "${value.trim()}" in this directory.`,
+      });
   const supersedes = supersedesAnswer.trim() === '' ? null : findAdrByNumber(context.adrs, supersedesAnswer);
   const supersedesNote = supersedes === null ? '' : `${context.language === 'fr' ? 'Remplace' : 'Supersedes'} ${supersedes.id} (${supersedes.title}).`;
+  const fileName = madrFileName(String(number), title);
 
   return {
     id,
-    fileName: madrFileName(String(number), title),
+    fileName: category === null || category === '' ? fileName : `${category}/${fileName}`,
     supersedes,
     draft: {
       title,
@@ -145,7 +209,7 @@ export async function askNewAdr(prompter: Prompter, context: AddContext, number:
       propositions,
       chosen,
       comment,
-      outcomeDetails: '',
+      outcomeDetails: outcome.join('\n\n'),
       moreInfo: [moreInfo, supersedesNote].filter(Boolean).join('\n\n'),
       otherSections: [],
       language: context.language,

@@ -78,6 +78,10 @@ Chosen option: "<Option 1>", because <justification>.
 * Good, because …
 * Bad, because …
 
+### Confirmation
+
+<comment la mise en œuvre sera vérifiée, si la source le dit>
+
 ## Pros and Cons of the Options
 
 ### <Option 1>
@@ -85,6 +89,7 @@ Chosen option: "<Option 1>", because <justification>.
 <texte facultatif>
 
 * Good, because …
+* Neutral, because …
 * Bad, because …
 
 ### <Option 2>
@@ -99,19 +104,23 @@ Règles :
 - `date` et `decision-makers` seulement si la source les donne.
 - « Decision Outcome » : omis pour une ADR proposée sans recommandation ; sinon une phrase de tête (`Chosen option: …`, `Rejected, because …`, `Deferred, because …`), puis éventuellement `### Consequences`.
 - Les titres de « Pros and Cons of the Options » reprennent **exactement** ceux de « Considered Options ».
+- `### Confirmation` (MADR 4) seulement si la source dit comment la décision sera vérifiée (revue, test, règle de lint) ; `Neutral, because …` pour un argument ni pour ni contre.
+- Gros projets : une ADR peut aller dans un **dossier de catégorie** (`docs/decisions/backend/0012-…md`, deux niveaux au plus) si l'utilisateur le demande ou si le dossier en a déjà ; la numérotation reste unique sur tout le dossier.
+- Avant d'écrire, chercher dans le dossier une ADR existante sur le même sujet : la signaler plutôt que la dupliquer (au besoin, la nouvelle la remplace : `superseded by`).
 - Titres de section MADR en anglais par défaut ; si l'utilisateur veut du français : `## Contexte et problématique`, `## Options envisagées`, `## Décision`, `## Avantages et inconvénients des options` (arguments `* Bon, car …` / `* Mauvais, car …`).
 - Une ligne vide entre chaque bloc, le fichier se termine par un saut de ligne.
 
-**Emplacement** : le dossier demandé par l'utilisateur ; sinon `docs/decisions/` du projet courant, ou `workspace/` dans ce dépôt. **Ne jamais écraser** un fichier existant sans le demander.
+**Emplacement** : le dossier demandé par l'utilisateur ; sinon `docs/decisions/` du projet courant, ou `workspace/` dans ce dépôt. Une source qui ne donne que contexte, options et décision peut suivre le modèle minimal (`templates/madr-minimal.md`). **Ne jamais écraser** un fichier existant sans le demander.
 
 ## 4. Valider et corriger
 
 ```sh
 npm run validate -- <dossier>        # dans ce dépôt
 adr-deck validate <dossier>          # avec le paquet installé
+adr-deck validate --strict <dossier> # + modèles MADR et markdownlint
 ```
 
-Corriger toutes les **erreurs** et recommencer. Les avertissements (ex. « aucune option envisagée ») sont acceptables s'ils reflètent la source.
+Corriger toutes les **erreurs** et recommencer. `--strict` ajoute les règles des modèles MADR et de markdownlint : à viser pour des fichiers neufs, sans inventer de Confirmation que la source ne donne pas. Les avertissements (ex. « aucune option envisagée ») sont acceptables s'ils reflètent la source.
 
 ## 5. Rendre compte
 

@@ -23,6 +23,8 @@ export const PropositionSchema = z.object({
   body: z.string(),
   pros: z.array(z.string()),
   cons: z.array(z.string()),
+  /** MADR 4 `* Neutral, because …` arguments. */
+  neutral: z.array(z.string()),
 });
 export type Proposition = z.infer<typeof PropositionSchema>;
 
@@ -38,7 +40,7 @@ export type Decision = z.infer<typeof DecisionSchema>;
 
 export const AdrSchema = z.object({
   id: z.string().regex(ADR_ID_PATTERN),
-  /** MADR file name, relative to the decisions directory. */
+  /** MADR file path relative to the decisions directory, `/`-separated (`0007-x.md`, `backend/0007-x.md`). */
   file: z.string().min(1),
   title: z.string().min(1),
   status: StatusSchema,

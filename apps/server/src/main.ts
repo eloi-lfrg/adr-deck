@@ -10,9 +10,10 @@ const server = await startServer({
   port: config.port,
   host: config.host,
   seedDir: EXAMPLES_DIR,
+  readOnly: config.readOnly,
   ...(config.serveStatic ? { webDist: WEB_DIST } : {}),
 });
-process.stdout.write(`adr-deck — API on ${server.url} — decisions: ${dir}\n`);
+process.stdout.write(`adr-deck — API on ${server.url} — decisions: ${dir}${config.readOnly ? ' (read-only)' : ''}\n`);
 
 const shutdown = (): void => {
   server.close().then(

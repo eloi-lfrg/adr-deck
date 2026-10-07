@@ -1,6 +1,6 @@
 {
   "name": "adr-deck",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Revue d'ADR au format MADR : une ADR par diapositive, une décision en un clic, écrite directement dans le fichier Markdown.",
   "keywords": [
     "adr",

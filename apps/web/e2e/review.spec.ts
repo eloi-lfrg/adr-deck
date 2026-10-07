@@ -114,3 +114,69 @@ test.describe('language', () => {
     await expect(page.getByRole('button', { name: /Iniciar la revisión/u })).toBeVisible();
   });
 });
+
+test('notes the participants and sends an ADR back for rework', async ({ page }) => {
+  // ADR-0004 is deferred since the previous scenario: still open for a decision.
+  await page.goto('/revue?mode=all&at=ADR-0004');
+  await expect(page.getByRole('heading', { name: /Passage en monorepo/u })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Participants' }).click();
+  const name = page.getByPlaceholder('Nom, puis Entrée');
+  await name.fill('Alice');
+  await name.press('Enter');
+  await name.fill('Bob');
+  await name.press('Enter');
+  await page.getByRole('listitem').filter({ hasText: 'Bob' }).getByRole('button', { name: 'Consulté' }).click();
+  await page.getByRole('button', { name: 'Terminé' }).click();
+  await expect(page.getByRole('button', { name: '2 participants' })).toBeVisible();
+
+  await page.keyboard.press('w');
+  await page.keyboard.type('Chiffrer la migration du CI');
+  await page.keyboard.press('Enter');
+
+  await expect.poll(async () => read('0004-monorepo.md')).toContain('### Actions\n\n* [ ] Chiffrer la migration du CI\n');
+  const content = await read('0004-monorepo.md');
+  expect(content).toContain('status: proposed');
+  expect(content).toMatch(/decision-makers: .*Alice/u);
+  expect(content).toContain('consulted: Bob');
+});
+
+test('shows the consequences and deprecates or supersedes an accepted ADR', async ({ page }) => {
+  await page.goto('/revue?mode=all&at=ADR-0001');
+  await expect(page.getByText('Conséquences', { exact: true })).toBeVisible();
+
+  await page.goto('/revue?mode=all&at=ADR-0011');
+  await page.getByRole('button', { name: 'Rendre cette ADR obsolète' }).click();
+  await page.getByLabel('Raison (facultative)').fill('le compilateur l’impose désormais');
+  await page.getByRole('button', { name: 'Rendre obsolète', exact: true }).click();
+  await expect.poll(async () => read('0011-typescript-strict.md')).toContain('status: deprecated');
+  expect(await read('0011-typescript-strict.md')).toMatch(/Deprecated on \d{4}-\d{2}-\d{2}, because le compilateur l’impose désormais\./u);
+
+  await page.goto('/revue?mode=all&at=ADR-0012');
+  await page.getByRole('button', { name: 'Remplacer cette ADR par une autre' }).click();
+  await page.getByPlaceholder('Choisir la nouvelle ADR…').fill('0015');
+  await page.getByRole('option', { name: /ADR-0015/u }).click();
+  await page.getByRole('button', { name: 'Remplacer', exact: true }).click();
+  await expect.poll(async () => read('0012-deploiement-continu.md')).toContain('status: superseded by ADR-0015');
+  await expect.poll(async () => read('0015-api-rest-openapi.md')).toContain('Supersedes ADR-0012');
+
+  // One undo restores both files.
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => read('0012-deploiement-continu.md')).toContain('status: accepted');
+  await expect.poll(async () => read('0015-api-rest-openapi.md')).not.toContain('Supersedes ADR-0012');
+});
+
+test('hides every decision control on a read-only server', async ({ page }) => {
+  await page.route('**/api/adrs', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...((await response.json()) as object), readOnly: true } });
+  });
+  await page.goto('/');
+  await expect(page.getByText('Lecture seule')).toBeVisible();
+  await expect(page.getByRole('button', { name: /participant/iu })).toHaveCount(0);
+
+  await page.goto('/revue?mode=all&at=ADR-0002');
+  await expect(page.getByRole('heading', { level: 2, name: /cache/iu })).toBeVisible();
+  await expect(page.getByRole('group', { name: /Décision pour/u })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Modifier la décision/u })).toHaveCount(0);
+});

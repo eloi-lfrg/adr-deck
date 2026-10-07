@@ -68,7 +68,7 @@ const label = computed(() => {
       </div>
       <h3 class="mt-[0.7cqw] font-display text-[max(22px,1.6cqw)] leading-tight text-balance">{{ proposition.title }}</h3>
       <div
-        v-if="proposition.body || proposition.pros.length > 0 || proposition.cons.length > 0"
+        v-if="proposition.body || proposition.pros.length + proposition.cons.length + proposition.neutral.length > 0"
         class="mt-[0.7cqw] min-h-0 flex-1 space-y-[0.6cqw] overflow-y-auto pr-1 text-[max(20px,1.12cqw)] leading-snug text-foreground/75"
       >
         <MarkdownText v-if="proposition.body" :source="proposition.body" />
@@ -76,6 +76,10 @@ const label = computed(() => {
           <div v-for="(pro, proIndex) in proposition.pros" :key="`pro-${proIndex}`" class="flex gap-2">
             <dt class="shrink-0 font-semibold text-status-accepted" :aria-label="m.proposition.pro">+</dt>
             <dd>{{ pro }}</dd>
+          </div>
+          <div v-for="(neutral, neutralIndex) in proposition.neutral" :key="`neutral-${neutralIndex}`" class="flex gap-2">
+            <dt class="shrink-0 font-semibold text-muted-foreground" :aria-label="m.proposition.neutral">○</dt>
+            <dd>{{ neutral }}</dd>
           </div>
           <div v-for="(con, conIndex) in proposition.cons" :key="`con-${conIndex}`" class="flex gap-2">
             <dt class="shrink-0 font-semibold text-status-rejected" :aria-label="m.proposition.con">−</dt>

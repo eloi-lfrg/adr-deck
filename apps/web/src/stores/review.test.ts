@@ -97,4 +97,58 @@ describe('review store', () => {
     await store.reloadFile(CACHE);
     expect(store.adrById('ADR-0002')).toMatchObject({ title: 'Cache des réponses HTTP', status: 'refusée' });
   });
+
+  it('sends an ADR back for rework with its actions and the participants', async () => {
+    vi.spyOn(api, 'writeFile').mockResolvedValue({ revision: 'r2' });
+    const store = useReviewStore();
+    await store.load();
+    store.addParticipant('Marie');
+    store.addParticipant('  Léa ', 'consulted');
+    store.addParticipant('marie');
+    expect(store.participants).toEqual([
+      { name: 'Marie', role: 'decider' },
+      { name: 'Léa', role: 'consulted' },
+    ]);
+    store.rework('ADR-0002', ['Mesurer le taux de succès', '']);
+    const content = store.contentOf(CACHE)!;
+    expect(content).toContain('status: proposed');
+    expect(content).toContain('consulted: Léa');
+    expect(content).toContain('### Actions\n\n* [ ] Mesurer le taux de succès\n');
+    expect(store.sessionDecisions).toMatchObject([{ adrId: 'ADR-0002', outcome: 'rework', actions: ['Mesurer le taux de succès'] }]);
+    expect(store.undo()).toBe('ADR-0002');
+    expect(store.contentOf(CACHE)).toBe(cache.content);
+  });
+
+  it('supersedes an ADR in both files and undoes both at once', async () => {
+    const write = vi.spyOn(api, 'writeFile').mockResolvedValue({ revision: 'r2' });
+    const store = useReviewStore();
+    await store.load();
+    const strict = files.find((file) => file.name.startsWith('0011-'))!;
+    const rest = files.find((file) => file.name.startsWith('0015-'))!;
+    store.supersede('ADR-0011', 'ADR-0015', 'OpenAPI couvre le besoin');
+    expect(store.adrById('ADR-0011')?.decision?.replacedBy).toBe('ADR-0015');
+    expect(store.contentOf(rest.name)).toContain('Supersedes ADR-0011 (Enable TypeScript strict mode in every package).');
+    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS + 10);
+    expect(write.mock.calls.map((call) => call[0]).sort()).toEqual([strict.name, rest.name].sort());
+    expect(store.undo()).toBe('ADR-0011');
+    expect(store.contentOf(strict.name)).toBe(strict.content);
+    expect(store.contentOf(rest.name)).toBe(rest.content);
+  });
+
+  it('refuses to change anything on a read-only server', async () => {
+    vi.spyOn(api, 'listAdrs').mockResolvedValue({ title: 'Projet', dir: '/repo/docs/decisions', readOnly: true, files });
+    const store = useReviewStore();
+    await store.load();
+    expect(store.readOnly).toBe(true);
+    expect(() => store.decide('ADR-0002', { status: 'refusée', retained: [], comment: null, nextReview: null, replacedBy: null })).toThrow();
+    expect(store.contentOf(CACHE)).toBe(cache.content);
+  });
+
+  it('lists category folders and the people named in the ADRs', async () => {
+    vi.spyOn(api, 'listAdrs').mockResolvedValue({ title: 'Projet', dir: '/d', files: [...files, { name: 'backend/0042-queue.md', content: '# Queue\n', revision: 'r' }] });
+    const store = useReviewStore();
+    await store.load();
+    expect(store.categories).toEqual(['backend']);
+    expect(store.knownPeople).toContain('Marie');
+  });
 });

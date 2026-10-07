@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { watch, type FSWatcher } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
-import { isMadrFileName } from '@adr/format';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { baseNameOf, isMadrFileName, isMadrPath, MAX_CATEGORY_DEPTH } from '@adr/format';
 
 export const MAX_BACKUPS = 10;
 
@@ -29,7 +29,7 @@ export class FileNotFoundError extends Error {
 
 export class InvalidNameError extends Error {
   constructor(name: string) {
-    super(`Invalid file name: "${name}" (expected NNNN-title.md, without a path).`);
+    super(`Invalid file name: "${name}" (expected NNNN-title.md, possibly in a category folder).`);
     this.name = 'InvalidNameError';
   }
 }
@@ -38,32 +38,49 @@ export function revisionOf(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex').slice(0, 20);
 }
 
+/** Accepts `NNNN-title.md` and `category/NNNN-title.md` (`/`-separated, inside the decisions directory). */
 export function assertValidName(name: string): void {
-  if (name !== basename(name) || !isMadrFileName(name) || /[\\/\0]/u.test(name)) throw new InvalidNameError(name);
+  if (!isMadrPath(name) || /[\\\0]/u.test(name)) throw new InvalidNameError(name);
 }
 
 function isNotFound(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
-async function madrNames(dir: string): Promise<string[]> {
+/** Folders never read as categories. */
+const SKIPPED_FOLDERS = new Set(['node_modules', 'dist', 'build', 'target', 'vendor']);
+
+/**
+ * MADR files of a directory, as `/`-separated paths; with `depth` > 0, also those of its category folders
+ * (`backend/0003-x.md`), hidden and dependency folders excluded.
+ */
+async function madrNames(dir: string, depth = MAX_CATEGORY_DEPTH, prefix = ''): Promise<string[]> {
+  let entries;
   try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isFile() && isMadrFileName(entry.name))
-      .map((entry) => entry.name)
-      .sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
+    entries = await readdir(dir, { withFileTypes: true });
   } catch (error) {
     if (isNotFound(error) || (error instanceof Error && 'code' in error && error.code === 'ENOTDIR')) return [];
     throw error;
   }
+  const names: string[] = [];
+  for (const entry of entries) {
+    if (entry.isFile() && isMadrFileName(entry.name)) names.push(`${prefix}${entry.name}`);
+    else if (depth > 0 && entry.isDirectory() && !entry.name.startsWith('.') && !SKIPPED_FOLDERS.has(entry.name)) {
+      names.push(...(await madrNames(join(dir, entry.name), depth - 1, `${prefix}${entry.name}/`)));
+    }
+  }
+  return names.sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
 }
 
-/** First candidate directory holding MADR files; the launch directory itself when none does. */
+/**
+ * First candidate directory holding MADR files (its category folders included); the launch directory itself when
+ * none does. The launch directory only counts for the files at its top level, so that launching from a project
+ * root finds `docs/decisions` rather than the root.
+ */
 export async function resolveDecisionsDir(root: string): Promise<string> {
   for (const candidate of DECISIONS_CANDIDATES) {
     const dir = resolve(root, candidate);
-    if ((await madrNames(dir)).length > 0) return dir;
+    if ((await madrNames(dir, candidate === '.' ? 0 : MAX_CATEGORY_DEPTH)).length > 0) return dir;
   }
   return resolve(root);
 }
@@ -102,7 +119,10 @@ export class Workspace extends EventEmitter<{ event: [WorkspaceEvent]; error: [E
   async init(seedDir?: string): Promise<void> {
     await mkdir(this.dir, { recursive: true });
     if (seedDir !== undefined && (await this.listNames()).length === 0) {
-      for (const name of await madrNames(seedDir)) await copyFile(join(seedDir, name), join(this.dir, name));
+      for (const name of await madrNames(seedDir)) {
+        await mkdir(dirname(join(this.dir, name)), { recursive: true });
+        await copyFile(join(seedDir, name), join(this.dir, name));
+      }
     }
     const names = await this.listNames();
     for (const name of names) this.known.set(name, revisionOf(await readFile(join(this.dir, name), 'utf8')));
@@ -111,7 +131,9 @@ export class Workspace extends EventEmitter<{ event: [WorkspaceEvent]; error: [E
 
   path(name: string): string {
     assertValidName(name);
-    return join(this.dir, name);
+    const path = resolve(this.dir, ...name.split('/'));
+    if (relative(this.dir, path).startsWith('..')) throw new InvalidNameError(name);
+    return path;
   }
 
   listNames(): Promise<string[]> {
@@ -162,7 +184,7 @@ export class Workspace extends EventEmitter<{ event: [WorkspaceEvent]; error: [E
 
   private async atomicWrite(name: string, content: string): Promise<string> {
     const target = this.path(name);
-    const temp = join(this.dir, `.${name}.${randomBytes(6).toString('hex')}.tmp`);
+    const temp = join(dirname(target), `.${baseNameOf(name)}.${randomBytes(6).toString('hex')}.tmp`);
     const revision = revisionOf(content);
     this.known.set(name, revision);
     try {
@@ -177,7 +199,8 @@ export class Workspace extends EventEmitter<{ event: [WorkspaceEvent]; error: [E
 
   private async backup(name: string, content: string): Promise<void> {
     await mkdir(this.backupDir, { recursive: true });
-    const stem = name.slice(0, -'.md'.length);
+    // One flat folder: `backend/0003-x.md` → `backend__0003-x.<stamp>.md`.
+    const stem = name.slice(0, -'.md'.length).replaceAll('/', '__');
     const stamp = new Date().toISOString().replace(/[-:.]/gu, '');
     await writeFile(join(this.backupDir, `${stem}.${stamp}.md`), content, 'utf8');
     const backups = (await readdir(this.backupDir))
@@ -199,8 +222,11 @@ export class Workspace extends EventEmitter<{ event: [WorkspaceEvent]; error: [E
 
   /** Watches the directory (fs events plus a slow poll, for synced folders such as Google Drive). */
   startWatching(pollMs = 3000): void {
-    this.watcher = watch(this.dir, (_event, filename) => {
-      if (filename && isMadrFileName(filename)) this.schedule(filename);
+    // Category folders are watched natively on macOS and Windows; elsewhere the poll below picks their changes up.
+    const recursive = process.platform === 'darwin' || process.platform === 'win32';
+    this.watcher = watch(this.dir, { recursive }, (_event, filename) => {
+      const name = filename?.split(sep).join('/');
+      if (name && isMadrPath(name)) this.schedule(name);
     });
     this.watcher.on('error', (error: Error) => {
       this.emit('error', error);
@@ -250,7 +276,7 @@ export class Workspace extends EventEmitter<{ event: [WorkspaceEvent]; error: [E
     if (this.locks.has(name)) return;
     let content: string;
     try {
-      content = await readFile(join(this.dir, name), 'utf8');
+      content = await readFile(this.path(name), 'utf8');
     } catch (error) {
       if (!isNotFound(error)) throw error;
       if (this.known.delete(name)) this.emit('event', { type: 'files' });

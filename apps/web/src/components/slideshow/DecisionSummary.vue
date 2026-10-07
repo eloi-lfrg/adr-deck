@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import type { Adr } from '@adr/format';
-import { Pencil } from '@lucide/vue';
+import { Archive, Pencil, Replace } from '@lucide/vue';
 import AdrLink from '@/components/AdrLink.vue';
 import { formatDate, useI18n } from '@/i18n';
 import { decisionLabel, STATUS_STYLES } from '@/lib/status';
+import { useReviewStore } from '@/stores/review';
 
 defineProps<{ adr: Adr }>();
-defineEmits<{ modify: []; go: [id: string] }>();
+defineEmits<{ modify: []; go: [id: string]; lifecycle: [mode: 'supersede' | 'deprecate'] }>();
 const { m } = useI18n();
+const review = useReviewStore();
+const action =
+  'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[max(16px,0.9cqw)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2';
 </script>
 
 <template>
@@ -21,13 +25,16 @@ const { m } = useI18n();
     </p>
     <p v-if="adr.decision?.comment" class="min-w-0 flex-1 truncate text-foreground/70">« {{ adr.decision.comment }} »</p>
     <span v-else class="flex-1" />
-    <button
-      type="button"
-      class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[max(16px,0.9cqw)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2"
-      :aria-label="m.slide.modifyLabel"
-      @click="$emit('modify')"
-    >
-      <Pencil class="size-[1em]" /> {{ m.slide.modify }}
-    </button>
+    <template v-if="!review.readOnly">
+      <button v-if="adr.status === 'validée' || adr.status === 'obsolète'" type="button" :class="action" :aria-label="m.slide.supersedeLabel" @click="$emit('lifecycle', 'supersede')">
+        <Replace class="size-[1em]" /> {{ m.slide.supersede }}
+      </button>
+      <button v-if="adr.status === 'validée'" type="button" :class="action" :aria-label="m.slide.deprecateLabel" @click="$emit('lifecycle', 'deprecate')">
+        <Archive class="size-[1em]" /> {{ m.slide.deprecate }}
+      </button>
+      <button type="button" :class="action" :aria-label="m.slide.modifyLabel" @click="$emit('modify')">
+        <Pencil class="size-[1em]" /> {{ m.slide.modify }}
+      </button>
+    </template>
   </div>
 </template>

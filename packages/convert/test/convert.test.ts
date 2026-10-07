@@ -82,7 +82,7 @@ describe('importDocx', () => {
   });
 
   // The info string of a code fence (```ts) has no place in Word and is not kept.
-  it('keeps markdown, code, outcome subsections, other sections and metadata', async () => {
+  it('keeps markdown, code, outcome subsections, neutral arguments, other sections, metadata and the category folder', async () => {
     const source = `---
 status: accepted
 date: 2026-10-01
@@ -141,9 +141,12 @@ Checked in March.
 
 Follow-up in Q1.
 `;
-    const original = parseMadrStrict(source, '0042-rich-adr.md');
+    const original = parseMadrStrict(source, 'platform/0042-rich-adr.md');
+    expect(original.propositions[0]!.neutral).toEqual(['familiar']);
     const imported = await importDocx(await exportDocx({ title: 'P', source: '/d', adrs: [original], now: new Date() }));
     expect(imported.issues).toEqual([]);
+    // The category folder travels with the file name.
+    expect(imported.files[0]!.name).toBe('platform/0042-rich-adr.md');
     expect(essentials(parseMadrStrict(imported.files[0]!.content, imported.files[0]!.name))).toEqual(essentials(original));
   });
 

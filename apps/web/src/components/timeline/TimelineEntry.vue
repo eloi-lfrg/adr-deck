@@ -2,7 +2,7 @@
 import type { Adr } from '@adr/format';
 import { computed } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
-import { Check, ChevronDown, Minus, Play, Plus } from '@lucide/vue';
+import { Check, ChevronDown, Circle, Minus, Play, Plus } from '@lucide/vue';
 import AdrLink from '@/components/AdrLink.vue';
 import MarkdownText from '@/components/MarkdownText.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -140,10 +140,14 @@ const panelId = computed(() => `timeline-${props.adr.id}`);
                     <span v-if="highlighted.includes(proposition.id)" class="sr-only">({{ m.proposition.retained }})</span>
                   </p>
                   <MarkdownText v-if="proposition.body" :source="proposition.body" class="mt-1.5 text-sm text-muted-foreground" />
-                  <ul v-if="proposition.pros.length + proposition.cons.length > 0" class="mt-2.5 space-y-1 text-sm">
+                  <ul v-if="proposition.pros.length + proposition.cons.length + proposition.neutral.length > 0" class="mt-2.5 space-y-1 text-sm">
                     <li v-for="(pro, index) in proposition.pros" :key="`pro-${index}`" class="flex gap-2">
                       <Plus class="mt-0.5 size-4 shrink-0 text-status-accepted" :aria-label="m.proposition.pro" />
                       <span>{{ pro }}</span>
+                    </li>
+                    <li v-for="(neutral, index) in proposition.neutral" :key="`neutral-${index}`" class="flex gap-2">
+                      <Circle class="mt-1 size-3 shrink-0 text-muted-foreground" :aria-label="m.proposition.neutral" />
+                      <span>{{ neutral }}</span>
                     </li>
                     <li v-for="(con, index) in proposition.cons" :key="`con-${index}`" class="flex gap-2">
                       <Minus class="mt-0.5 size-4 shrink-0 text-status-rejected" :aria-label="m.proposition.con" />

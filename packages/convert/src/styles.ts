@@ -37,6 +37,7 @@ export interface Labels {
   options: string;
   pros: string;
   cons: string;
+  neutral: string;
   decision: string;
   retained: string;
   date: string;
@@ -68,6 +69,7 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     options: 'Considered options',
     pros: 'Pro',
     cons: 'Con',
+    neutral: 'Neutral',
     decision: 'Decision',
     retained: 'Chosen options',
     date: 'Date',
@@ -97,6 +99,7 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     options: 'Options envisagées',
     pros: 'Pour',
     cons: 'Contre',
+    neutral: 'Neutre',
     decision: 'Décision',
     retained: 'Options retenues',
     date: 'Date',
@@ -126,6 +129,7 @@ export const LABELS: Record<ExportLanguage, Labels> = {
     options: 'Opciones consideradas',
     pros: 'A favor',
     cons: 'En contra',
+    neutral: 'Neutral',
     decision: 'Decisión',
     retained: 'Opciones elegidas',
     date: 'Fecha',

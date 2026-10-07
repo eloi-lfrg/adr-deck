@@ -31,6 +31,10 @@ Chosen option: "Strict mode everywhere", because the migration took less than tw
 * Good, because `noUncheckedIndexedAccess` caught three real bugs during the trial
 * Bad, because some legacy modules carry `// @ts-expect-error` until they are rewritten
 
+### Confirmation
+
+CI fails when a package `tsconfig.json` does not extend the strict base configuration.
+
 ## Pros and Cons of the Options
 
 ### Strict mode everywhere

@@ -21,6 +21,10 @@ TypeORM (ADR-0007) ne fournit pas un typage suffisant des requêtes et freine le
 
 Chosen options: "Drizzle ORM" and "Kysely", because Drizzle pour le schéma et les migrations, Kysely pour les requêtes analytiques.
 
+### Confirmation
+
+Une règle ESLint interdit les requêtes SQL brutes hors de `packages/db`.
+
 ## Pros and Cons of the Options
 
 ### Drizzle ORM

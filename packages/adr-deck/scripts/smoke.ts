@@ -72,7 +72,24 @@ try {
     server.kill('SIGTERM');
   }
 
+  // `serve`: the timeline shared read-only.
+  const servePort = await freePort();
+  const shared = spawn(bin, ['serve', '--host', '127.0.0.1', '--port', String(servePort)], { cwd: repo, stdio: ['ignore', 'pipe', 'inherit'] });
+  try {
+    const health = (await (await waitFor(`http://127.0.0.1:${servePort}/api/health`, 15_000)).json()) as { readOnly: boolean };
+    check(health.readOnly, 'adr-deck serve is read-only');
+    const write = await fetch(`http://127.0.0.1:${servePort}/api/adrs/0002-cache-http.md`, { method: 'PUT', headers: { 'If-Match': 'x' }, body: '# X\n' });
+    check(write.status === 403, 'adr-deck serve refuses writes');
+  } finally {
+    shared.kill('SIGTERM');
+  }
+
   check(run(bin, ['validate'], repo).includes('15 readable ADRs'), 'adr-deck validate');
+  check(run(bin, ['validate', '--strict'], repo).includes('15 readable ADRs'), 'adr-deck validate --strict (MADR template and markdownlint rules)');
+  await mkdir(join(decisions, 'backend'), { recursive: true });
+  await writeFile(join(decisions, 'backend/0016-queue.md'), '# Queue\n\n## Context and Problem Statement\n\nJobs.\n\n## Considered Options\n\n* A\n');
+  check(run(bin, ['validate'], repo).includes('16 readable ADRs'), 'adr-deck validate reads category folders');
+  await rm(join(decisions, 'backend'), { recursive: true });
   run(bin, ['export', 'decisions.docx'], repo);
   const docx = await readFile(join(repo, 'decisions.docx'));
   check((await readdir(repo)).includes('decisions.docx') && docx.subarray(0, 2).toString() === 'PK', 'adr-deck export → .docx');

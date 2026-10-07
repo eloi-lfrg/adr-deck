@@ -11,6 +11,8 @@ export interface CollectionResponse {
   title: string;
   /** Absolute path of the decisions directory. */
   dir: string;
+  /** True when the server refuses writes (`adr-deck serve`, `--read-only`). */
+  readOnly?: boolean;
   files: FileContent[];
 }
 
@@ -47,7 +49,8 @@ function errorMessage(body: Record<string, unknown>, status: number): string {
   return typeof body['error'] === 'string' ? body['error'] : t().api.status(status);
 }
 
-const fileUrl = (name: string): string => `/api/adrs/${encodeURIComponent(name)}`;
+/** File paths may hold a category folder (`backend/0003-x.md`): each segment is encoded on its own. */
+const fileUrl = (name: string): string => `/api/adrs/${name.split('/').map(encodeURIComponent).join('/')}`;
 
 function fileNameFrom(disposition: string | null): string {
   const encoded = /filename\*=UTF-8''([^;]+)/iu.exec(disposition ?? '')?.[1];

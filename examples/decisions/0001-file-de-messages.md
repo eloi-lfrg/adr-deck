@@ -25,6 +25,10 @@ Chosen option: "PostgreSQL comme file (pg-boss)", because suffisant pour nos vol
 * Good, because aucune infrastructure supplémentaire.
 * Bad, because le débit plafonne au-delà de quelques milliers de jobs par minute.
 
+### Confirmation
+
+Un tableau de bord suit le débit de pg-boss ; une alerte se déclenche au-delà de 4 000 jobs/min.
+
 ## Pros and Cons of the Options
 
 ### PostgreSQL comme file (pg-boss)

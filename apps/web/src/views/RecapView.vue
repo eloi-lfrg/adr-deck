@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { Status } from '@adr/format';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { motion } from 'motion-v';
@@ -17,7 +16,7 @@ import { isTypingTarget, useShortcuts } from '@/composables/useShortcuts';
 import { api } from '@/lib/api';
 import { useI18n } from '@/i18n';
 import { STATUS_STYLES } from '@/lib/status';
-import { useReviewStore } from '@/stores/review';
+import { useReviewStore, type SessionOutcome } from '@/stores/review';
 
 const router = useRouter();
 const review = useReviewStore();
@@ -27,9 +26,11 @@ const { duration } = useMotionPreset();
 const exporting = ref(false);
 const paletteOpen = ref(false);
 
-const SHOWN: Status[] = ['validée', 'refusée', 'reportée'];
+const SHOWN: SessionOutcome[] = ['validée', 'refusée', 'reportée', 'rework'];
 const decisions = computed(() => review.sessionDecisions);
-const counts = computed(() => Object.fromEntries(SHOWN.map((status) => [status, decisions.value.filter((entry) => entry.status === status).length])) as Record<Status, number>);
+const counts = computed(() => Object.fromEntries(SHOWN.map((outcome) => [outcome, decisions.value.filter((entry) => entry.outcome === outcome).length])) as Record<SessionOutcome, number>);
+const outcomeLabel = (outcome: SessionOutcome): string => (outcome === 'rework' ? m.value.recap.reworks : m.value.status[outcome].plural);
+const outcomeText = (outcome: SessionOutcome): string => (outcome === 'rework' ? 'text-primary' : STATUS_STYLES[outcome].text);
 const today = computed(() => new Intl.DateTimeFormat(m.value.intlLocale, { dateStyle: 'full', timeZone: 'Europe/Paris' }).format(new Date()));
 
 async function exportDocx(): Promise<void> {
@@ -77,17 +78,17 @@ useShortcuts((event) => {
         <p class="mt-3 text-lg text-muted-foreground">{{ review.title }}</p>
       </motion.div>
 
-      <dl class="mt-12 grid grid-cols-3 gap-4">
+      <dl class="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <motion.div
-          v-for="(status, index) in SHOWN"
-          :key="status"
+          v-for="(outcome, index) in SHOWN"
+          :key="outcome"
           class="rounded-2xl border bg-card p-6 shadow-soft"
           :initial="{ opacity: 0, y: 14 }"
           :animate="{ opacity: 1, y: 0 }"
           :transition="{ duration: duration(0.5), delay: 0.1 + index * 0.08 }"
         >
-          <dt class="text-sm font-medium" :class="STATUS_STYLES[status].text">{{ m.status[status].plural }}</dt>
-          <dd class="mt-2 font-display text-6xl font-medium" :class="STATUS_STYLES[status].text"><AnimatedNumber :value="counts[status]" :duration-ms="800" /></dd>
+          <dt class="text-sm font-medium" :class="outcomeText(outcome)">{{ outcomeLabel(outcome) }}</dt>
+          <dd class="mt-2 font-display text-6xl font-medium" :class="outcomeText(outcome)"><AnimatedNumber :value="counts[outcome]" :duration-ms="800" /></dd>
         </motion.div>
       </dl>
 
@@ -110,8 +111,10 @@ useShortcuts((event) => {
               <p class="font-display text-lg leading-snug">{{ entry.title }}</p>
               <p v-if="entry.retained.length > 0" class="mt-0.5 text-sm text-muted-foreground">{{ m.recap.retained(entry.retained.join(', ')) }}</p>
               <p v-if="entry.comment" class="mt-1 text-[0.95rem] text-foreground/80">« {{ entry.comment }} »</p>
+              <p v-if="entry.actions.length > 0" class="mt-1 text-[0.95rem] text-foreground/80">{{ m.recap.actions(entry.actions.join(' · ')) }}</p>
             </div>
-            <StatusBadge :status="entry.status" />
+            <span v-if="entry.outcome === 'rework'" class="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-primary">{{ m.recap.rework }}</span>
+            <StatusBadge v-else :status="entry.outcome" />
           </motion.li>
         </ol>
       </section>

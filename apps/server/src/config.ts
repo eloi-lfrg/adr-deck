@@ -12,6 +12,8 @@ export interface ServerConfig {
   port: number;
   host: string;
   serveStatic: boolean;
+  /** `ADR_READ_ONLY=1`: refuse every write, as `adr-deck serve` does. */
+  readOnly: boolean;
 }
 
 /** Relative `ADR_WORKSPACE` values are resolved from the directory the command was launched in. */
@@ -27,5 +29,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     port,
     host: env['ADR_HOST'] ?? '127.0.0.1',
     serveStatic: env['NODE_ENV'] === 'production',
+    readOnly: env['ADR_READ_ONLY'] === '1',
   };
 }

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type { Status } from '@adr/format';
 import { computed, nextTick, ref } from 'vue';
-import { CalendarClock, Check, Clock, X } from '@lucide/vue';
+import { CalendarClock, Check, Clock, RefreshCcw, X } from '@lucide/vue';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/i18n';
 
 const props = defineProps<{ adrId: string; selected: string[]; hint: string | null }>();
-const emit = defineEmits<{ decide: [status: Status] }>();
+const emit = defineEmits<{ decide: [status: Status]; rework: [actions: string[]] }>();
 const comment = defineModel<string>('comment', { required: true });
 const nextReview = defineModel<string>('nextReview', { required: true });
 
@@ -15,6 +15,25 @@ const { m } = useI18n();
 const commentField = ref<HTMLTextAreaElement | null>(null);
 const dateField = ref<HTMLInputElement | null>(null);
 const showDate = ref(nextReview.value !== '');
+/** Rework mode: the comment gives way to the list of actions. */
+const reworking = ref(false);
+const actions = ref('');
+const actionsField = ref<HTMLTextAreaElement | null>(null);
+
+async function startRework(): Promise<void> {
+  reworking.value = true;
+  await nextTick();
+  actionsField.value?.focus();
+}
+
+function cancelRework(): void {
+  reworking.value = false;
+  actions.value = '';
+}
+
+function sendBack(): void {
+  emit('rework', actions.value.split('\n'));
+}
 const canValidate = computed(() => props.selected.length > 0);
 const selectionLabel = computed(() => props.selected.join(', '));
 
@@ -27,7 +46,7 @@ async function revealDate(): Promise<void> {
 const base =
   'inline-flex items-center gap-2 rounded-lg border px-[1.1cqw] py-[0.55cqw] text-[max(18px,1cqw)] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2';
 
-defineExpose({ focusComment: () => commentField.value?.focus() });
+defineExpose({ focusComment: () => commentField.value?.focus(), startRework, cancelRework });
 </script>
 
 <template>
@@ -80,11 +99,44 @@ defineExpose({ focusComment: () => commentField.value?.focus() });
         </TooltipTrigger>
         <TooltipContent>P</TooltipContent>
       </Tooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            :aria-label="m.decision.reworkLabel(adrId)"
+            :aria-pressed="reworking"
+            :class="cn(base, 'border-border text-foreground hover:border-primary hover:bg-accent', reworking && 'border-primary bg-accent')"
+            @click="reworking ? cancelRework() : startRework()"
+          >
+            <RefreshCcw class="size-[1em] text-primary" /> {{ m.decision.rework }}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>W</TooltipContent>
+      </Tooltip>
     </div>
 
     <p v-if="hint" class="text-[max(16px,0.9cqw)] text-status-rejected" role="alert">{{ hint }}</p>
 
+    <div v-if="reworking" class="flex min-w-[16rem] flex-1 items-end gap-2">
+      <textarea
+        ref="actionsField"
+        v-model="actions"
+        rows="2"
+        :aria-label="m.decision.actionsLabel(adrId)"
+        :placeholder="m.decision.actions"
+        class="min-w-[12rem] flex-1 resize-none rounded-md border border-border bg-transparent px-2 py-1 text-[max(18px,1cqw)] leading-snug outline-none field-sizing-content placeholder:text-muted-foreground/60 focus:border-primary"
+        @keydown.enter.exact.prevent="sendBack"
+        @keydown.esc.stop.prevent="cancelRework"
+      />
+      <button type="button" :class="cn(base, 'border-transparent bg-primary font-semibold text-primary-foreground hover:bg-primary/90')" @click="sendBack">
+        {{ m.decision.saveActions }}
+      </button>
+      <button type="button" class="rounded-lg px-3 py-1.5 text-[max(16px,0.9cqw)] text-muted-foreground hover:bg-muted hover:text-foreground" @click="cancelRework">
+        {{ m.decision.cancel }}
+      </button>
+    </div>
     <textarea
+      v-else
       ref="commentField"
       v-model="comment"
       rows="1"
@@ -94,12 +146,12 @@ defineExpose({ focusComment: () => commentField.value?.focus() });
       @keydown.enter.exact.prevent="($event.target as HTMLTextAreaElement).blur()"
     />
 
-    <label v-if="showDate" class="flex items-center gap-2 text-[max(16px,0.9cqw)] text-muted-foreground">
+    <label v-if="showDate && !reworking" class="flex items-center gap-2 text-[max(16px,0.9cqw)] text-muted-foreground">
       <CalendarClock class="size-[1em]" aria-hidden="true" />
       <span class="sr-only">{{ m.decision.nextReview }}</span>
       <input ref="dateField" v-model="nextReview" type="date" class="bg-transparent text-foreground outline-none [color-scheme:inherit]" />
     </label>
-    <Tooltip v-else>
+    <Tooltip v-else-if="!reworking">
       <TooltipTrigger as-child>
         <button
           type="button"

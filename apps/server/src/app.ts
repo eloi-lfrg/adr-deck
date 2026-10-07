@@ -11,6 +11,8 @@ export interface AppOptions {
   title: string;
   /** Keep-alive interval for the SSE stream. */
   heartbeatMs?: number;
+  /** Refuses every write (`adr-deck serve`): the files can be read, never changed. */
+  readOnly?: boolean;
 }
 
 function stripRevision(header: string | undefined): string | null {
@@ -33,7 +35,7 @@ export function docxFileName(title: string): string {
   return `${stem || 'adr'}-decisions.docx`;
 }
 
-export function createApp({ workspace, title, heartbeatMs = 25_000 }: AppOptions): Hono {
+export function createApp({ workspace, title, heartbeatMs = 25_000, readOnly = false }: AppOptions): Hono {
   const app = new Hono();
 
   app.onError((error, c) => {
@@ -44,14 +46,15 @@ export function createApp({ workspace, title, heartbeatMs = 25_000 }: AppOptions
     return c.json({ error: 'Internal server error.', code: 'internal' }, 500);
   });
 
-  app.get('/api/health', (c) => c.json({ ok: true, dir: workspace.dir }));
+  app.get('/api/health', (c) => c.json({ ok: true, dir: workspace.dir, readOnly }));
 
   app.get('/api/adrs', async (c) => {
     c.header('Cache-Control', 'no-store');
-    return c.json({ title, dir: workspace.dir, files: await workspace.readAll() });
+    return c.json({ title, dir: workspace.dir, readOnly, files: await workspace.readAll() });
   });
 
-  app.get('/api/adrs/:name', async (c) => {
+  // `:name` may hold a category folder: `/api/adrs/backend/0003-x.md`.
+  app.get('/api/adrs/:name{.+}', async (c) => {
     const name = c.req.param('name');
     const snapshot = await workspace.read(name);
     c.header('ETag', `"${snapshot.revision}"`);
@@ -59,7 +62,8 @@ export function createApp({ workspace, title, heartbeatMs = 25_000 }: AppOptions
     return c.json({ name, ...snapshot });
   });
 
-  app.put('/api/adrs/:name', async (c) => {
+  app.put('/api/adrs/:name{.+}', async (c) => {
+    if (readOnly) return c.json({ error: 'Read-only server: the files cannot be changed.', code: 'readOnly' }, 403);
     const name = c.req.param('name');
     const expected = stripRevision(c.req.header('If-Match'));
     if (expected === null) return c.json({ error: 'If-Match header (revision) required.', code: 'revisionRequired' }, 428);

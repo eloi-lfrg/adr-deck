@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ArgsError, DEFAULT_HOST, DEFAULT_PORT, parseCommand } from '../src/args.ts';
+import { ArgsError, DEFAULT_HOST, DEFAULT_PORT, parseCommand, SERVE_HOST } from '../src/args.ts';
 
 const CWD = '/home/user/project';
 
 describe('parseCommand', () => {
   it('reviews the current directory without arguments', () => {
-    const expected = { kind: 'review', options: { root: CWD, port: DEFAULT_PORT, portExplicit: false, host: DEFAULT_HOST, open: true, view: 'grid' } };
+    const expected = { kind: 'review', options: { root: CWD, port: DEFAULT_PORT, portExplicit: false, host: DEFAULT_HOST, open: true, view: 'grid', readOnly: false } };
     expect(parseCommand([], {}, CWD)).toEqual(expected);
     expect(parseCommand(['review'], {}, CWD)).toEqual(expected);
   });
@@ -13,7 +13,7 @@ describe('parseCommand', () => {
   it('resolves a directory, a port and --no-open', () => {
     expect(parseCommand(['review', '../other', '--port', '9000', '--no-open'], {}, CWD)).toEqual({
       kind: 'review',
-      options: { root: '/home/user/other', port: 9000, portExplicit: true, host: DEFAULT_HOST, open: false, view: 'grid' },
+      options: { root: '/home/user/other', port: 9000, portExplicit: true, host: DEFAULT_HOST, open: false, view: 'grid', readOnly: false },
     });
     expect(parseCommand(['--dir', 'docs', '--no-open'], {}, CWD)).toMatchObject({ options: { root: '/home/user/project/docs', open: false } });
   });
@@ -40,10 +40,11 @@ describe('parseCommand', () => {
   });
 
   it('parses validate with paths or the current directory', () => {
-    expect(parseCommand(['validate'], {}, CWD)).toEqual({ kind: 'validate', paths: [CWD] });
-    expect(parseCommand(['validate', '0001-a.md', 'docs'], {}, CWD)).toEqual({
+    expect(parseCommand(['validate'], {}, CWD)).toEqual({ kind: 'validate', paths: [CWD], strict: false });
+    expect(parseCommand(['validate', '0001-a.md', 'docs', '--strict'], {}, CWD)).toEqual({
       kind: 'validate',
       paths: ['/home/user/project/0001-a.md', '/home/user/project/docs'],
+      strict: true,
     });
   });
 
@@ -62,17 +63,27 @@ describe('parseCommand', () => {
   it('opens the timeline with the same options as the review', () => {
     expect(parseCommand(['timeline'], {}, CWD)).toEqual({
       kind: 'review',
-      options: { root: CWD, port: DEFAULT_PORT, portExplicit: false, host: DEFAULT_HOST, open: true, view: 'timeline' },
+      options: { root: CWD, port: DEFAULT_PORT, portExplicit: false, host: DEFAULT_HOST, open: true, view: 'timeline', readOnly: false },
     });
+    expect(parseCommand(['timeline', '--read-only'], {}, CWD)).toMatchObject({ options: { readOnly: true } });
     expect(parseCommand(['timeline', '../other', '--no-open'], {}, CWD)).toMatchObject({ options: { root: '/home/user/other', open: false, view: 'timeline' } });
     expect(() => parseCommand(['timeline', 'a', 'b'], {}, CWD)).toThrow(ArgsError);
   });
 
   it('parses add with an optional directory', () => {
-    expect(parseCommand(['add'], {}, CWD)).toEqual({ kind: 'add', dir: null });
-    expect(parseCommand(['add', 'docs/adr'], {}, CWD)).toEqual({ kind: 'add', dir: '/home/user/project/docs/adr' });
-    expect(parseCommand(['add', '--dir', 'docs'], {}, CWD)).toEqual({ kind: 'add', dir: '/home/user/project/docs' });
+    expect(parseCommand(['add'], {}, CWD)).toEqual({ kind: 'add', dir: null, minimal: false, category: null });
+    expect(parseCommand(['add', 'docs/adr'], {}, CWD)).toEqual({ kind: 'add', dir: '/home/user/project/docs/adr', minimal: false, category: null });
+    expect(parseCommand(['add', '--dir', 'docs', '--minimal', '-c', 'backend/'], {}, CWD)).toEqual({ kind: 'add', dir: '/home/user/project/docs', minimal: true, category: 'backend' });
     expect(() => parseCommand(['add', 'a', 'b'], {}, CWD)).toThrow(ArgsError);
+    expect(() => parseCommand(['add', '--category', '../x'], {}, CWD)).toThrow(ArgsError);
+  });
+
+  it('shares the timeline read-only on every interface without opening the browser', () => {
+    expect(parseCommand(['serve', 'docs'], {}, CWD)).toEqual({
+      kind: 'review',
+      options: { root: '/home/user/project/docs', port: DEFAULT_PORT, portExplicit: false, host: SERVE_HOST, open: false, view: 'timeline', readOnly: true },
+    });
+    expect(parseCommand(['serve', '--host', '127.0.0.1', '--open'], {}, CWD)).toMatchObject({ options: { host: '127.0.0.1', open: true, readOnly: true } });
   });
 
   it('recognises help and version', () => {
@@ -86,7 +97,7 @@ describe('parseCommand', () => {
 
   it('rejects unknown options, unknown commands and extra directories', () => {
     expect(() => parseCommand(['--nope'], {}, CWD)).toThrow(ArgsError);
-    expect(() => parseCommand(['serve'], {}, CWD)).toThrow(ArgsError);
+    expect(() => parseCommand(['share'], {}, CWD)).toThrow(ArgsError);
     expect(() => parseCommand(['review', 'a', 'b'], {}, CWD)).toThrow(ArgsError);
     expect(() => parseCommand(['docs'], {}, CWD)).toThrow(ArgsError);
     expect(() => parseCommand(['--review'], {}, CWD)).toThrow(ArgsError);

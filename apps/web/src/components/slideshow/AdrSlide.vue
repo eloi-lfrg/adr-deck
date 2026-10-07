@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { Adr, Status } from '@adr/format';
+import { categoryOf, outcomeParts, reworkActions, type Adr, type Status } from '@adr/format';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { motion } from 'motion-v';
+import { Folder, ShieldQuestion } from '@lucide/vue';
 import AdrLink from '@/components/AdrLink.vue';
 import MarkdownText from '@/components/MarkdownText.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -21,7 +22,14 @@ const props = defineProps<{
   animateStamp: boolean;
   hint: string | null;
 }>();
-const emit = defineEmits<{ toggle: [id: string]; decide: [status: Status]; modify: []; go: [id: string] }>();
+const emit = defineEmits<{
+  toggle: [id: string];
+  decide: [status: Status];
+  rework: [actions: string[]];
+  modify: [];
+  go: [id: string];
+  lifecycle: [mode: 'supersede' | 'deprecate'];
+}>();
 const comment = defineModel<string>('comment', { required: true });
 const nextReview = defineModel<string>('nextReview', { required: true });
 
@@ -36,6 +44,11 @@ const { m } = useI18n();
 /** ADRs this one supersedes. */
 const replaced = computed(() => review.replaces[props.adr.id] ?? []);
 const hasStamp = computed(() => props.adr.status !== 'à décider' && props.adr.decision !== null);
+const category = computed(() => categoryOf(props.adr.file));
+/** « Decision Outcome » subsections: what accepting implies, and how it will be checked. */
+const outcome = computed(() => outcomeParts(props.adr));
+const openActions = computed(() => reworkActions(props.adr).filter((action) => !action.done));
+const missingConfirmation = computed(() => props.adr.status === 'validée' && outcome.value.confirmation === '');
 const columns = computed(() => Math.min(Math.max(props.adr.propositions.length, 2), 4));
 const basis = computed(() => `calc((100% - ${columns.value - 1} * 1.2cqw) / ${columns.value})`);
 
@@ -73,11 +86,11 @@ onMounted(() => {
 });
 onBeforeUnmount(() => observer?.disconnect());
 watch(
-  () => [props.adr.context, props.adr.drivers],
+  () => [props.adr.context, props.adr.drivers, props.adr.outcomeDetails, props.adr.moreInfo],
   () => void nextTick(measure),
 );
 
-defineExpose({ focusComment: () => bar.value?.focusComment() });
+defineExpose({ focusComment: () => bar.value?.focusComment(), startRework: () => bar.value?.startRework() });
 </script>
 
 <template>
@@ -95,7 +108,11 @@ defineExpose({ focusComment: () => bar.value?.focusComment() });
         <p class="flex flex-wrap items-center gap-x-[1cqw] gap-y-1 text-[max(14px,0.85cqw)] text-muted-foreground">
           <span class="font-mono">{{ adr.id }}</span>
           <StatusBadge :status="adr.status" class="text-[max(14px,0.85cqw)]" />
+          <span v-if="category" class="inline-flex items-center gap-1 font-mono"><Folder class="size-[1em]" aria-hidden="true" />{{ category }}</span>
           <span v-if="adr.tags.length > 0">{{ adr.tags.join(' · ') }}</span>
+          <span v-if="missingConfirmation" class="inline-flex items-center gap-1 text-status-deferred" :title="m.slide.noConfirmationLabel">
+            <ShieldQuestion class="size-[1em]" aria-hidden="true" />{{ m.slide.noConfirmation }}
+          </span>
           <span v-if="replaced.length > 0" class="flex flex-wrap items-center gap-x-1.5">
             {{ m.slide.replaces }}
             <AdrLink v-for="id in replaced" :id="id" :key="id" @go="(target) => emit('go', target)" />
@@ -118,6 +135,20 @@ defineExpose({ focusComment: () => bar.value?.focusComment() });
           <template v-if="adr.drivers">
             <p class="mt-[0.8cqw] font-medium text-foreground/90">{{ m.slide.drivers }}</p>
             <MarkdownText :source="adr.drivers" />
+          </template>
+          <template v-if="openActions.length > 0">
+            <p class="mt-[0.8cqw] font-medium text-primary">{{ m.slide.actions }}</p>
+            <ul class="list-disc pl-[1.2em]">
+              <li v-for="(action, index) in openActions" :key="index">{{ action.text }}</li>
+            </ul>
+          </template>
+          <template v-if="outcome.consequences">
+            <p class="mt-[0.8cqw] font-medium text-foreground/90">{{ m.slide.consequences }}</p>
+            <MarkdownText :source="outcome.consequences" />
+          </template>
+          <template v-if="outcome.confirmation">
+            <p class="mt-[0.8cqw] font-medium text-foreground/90">{{ m.slide.confirmation }}</p>
+            <MarkdownText :source="outcome.confirmation" />
           </template>
         </div>
         <button
@@ -163,8 +194,9 @@ defineExpose({ focusComment: () => bar.value?.focusComment() });
           :selected="selected"
           :hint="hint"
           @decide="(status) => emit('decide', status)"
+          @rework="(actions) => emit('rework', actions)"
         />
-        <DecisionSummary v-else :adr="adr" @modify="emit('modify')" @go="(id) => emit('go', id)" />
+        <DecisionSummary v-else :adr="adr" @modify="emit('modify')" @go="(id) => emit('go', id)" @lifecycle="(mode) => emit('lifecycle', mode)" />
       </motion.div>
     </div>
   </article>

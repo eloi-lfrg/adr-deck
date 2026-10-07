@@ -1,6 +1,6 @@
 # CLAUDE.md — adr-deck
 
-Application web locale de revue d'ADR au format **MADR** : `adr-deck` (ou `adr-deck review [dossier]`) lance l'application sur les fichiers `NNNN-titre.md` du dossier courant (ou de `docs/decisions`, `docs/adr`…), une ADR par diapositive, une décision écrite directement dans le fichier MADR. Le README (en anglais) décrit le produit en détail ; ce fichier résume ce qu'il faut savoir pour travailler dans le code.
+Application web locale de revue d'ADR au format **MADR** : `adr-deck` (ou `adr-deck review [dossier]`) lance l'application sur les fichiers `NNNN-titre.md` du dossier courant (ou de `docs/decisions`, `docs/adr`…, dossiers de catégorie compris), une ADR par diapositive, une décision écrite directement dans le fichier MADR. Le README (en anglais) décrit le produit ; `docs/GUIDE.md` (en français) est le guide d'usage complet (problématique, écrans, méthode, captures dans `docs/images/`). Ce fichier résume ce qu'il faut savoir pour travailler dans le code.
 
 ## Commandes
 
@@ -12,9 +12,11 @@ npm run dev                  # serveur 127.0.0.1:8787 + front localhost:5173
 npm run check                # typecheck + tous les tests unitaires — à lancer avant de rendre la main
 npm run test:e2e:chrome      # parcours Playwright avec le Chrome installé (le Chromium Playwright peut manquer)
 npm run validate -- <fichier|dossier>
+npm run validate:strict -- <fichier|dossier>   # + modèles MADR et markdownlint ; validate:example est strict
+npm run serve -- <dossier>   # frise en lecture seule sur le réseau local
 npm run export -- [sortie.docx] [--dir <dossier>] [--lang <en|fr|es>]
 npm run import -- <fichier.docx> [dossier] [--force]   # .docx exporté → fichiers MADR
-npm run add -- [dossier]     # nouvelle ADR en mode interactif
+npm run add -- [dossier] [--minimal] [--category <dossier>]   # nouvelle ADR en mode interactif
 npm run test:package         # build + npm pack + test du paquet adr-deck installé (review, validate, export)
 npm run install:global       # installe adr-deck globalement depuis le tarball
 ```
@@ -25,13 +27,14 @@ npm run install:global       # installe adr-deck globalement depuis le tarball
 
 | Chemin | Rôle |
 | --- | --- |
-| `packages/format` | `@adr/format` : schéma Zod (`schema.ts`), titres et statuts MADR FR/EN (`vocabulary.ts`), structure des lignes (`layout.ts`), lecture (`parse.ts`), édition ciblée `decide` / `undo` (`operations.ts`), écriture d'un fichier MADR complet (`serialize.ts`), collection d'un dossier (`collection.ts`), nommage `NNNN-titre.md` et numéro suivant (`files.ts`), dates Europe/Paris (`dates.ts`) |
+| `packages/format` | `@adr/format` : schéma Zod (`schema.ts`), titres et statuts MADR FR/EN (`vocabulary.ts`), structure des lignes (`layout.ts`), lecture (`parse.ts`), édition ciblée `decide` / `rework` / `supersedes` / `undo` avec participants (`operations.ts`), sous-sections Consequences / Confirmation / Actions (`sections.ts`), écriture d'un fichier MADR complet (`serialize.ts`), collection d'un dossier (`collection.ts`), chemins `[catégorie/]NNNN-titre.md` et numéro suivant (`files.ts`), validation stricte et markdownlint (`lint.ts`), ADR proches (`similar.ts`), dates Europe/Paris (`dates.ts`) |
 | `packages/convert` | `@adr/convert` : export `.docx` d'une collection d'ADR (`export.ts`), import inverse (`import.ts`, mammoth), libellés en/fr/es (`styles.ts`) |
-| `packages/adr-deck` | Paquet npm : CLI `adr-deck` (`src/cli.ts`, `src/args.ts` : `review` par défaut, `timeline` (même application ouverte sur `/timeline`), `add`, `export`, `import`, `validate` ; questions de `add` dans `src/add.ts`, testées avec des réponses scriptées), regroupée par esbuild avec les `@adr/*` (`scripts/build.ts`), test du tarball (`scripts/smoke.ts`), installation globale (`scripts/install-global.ts`) |
-| `apps/server` | Hono : API (`app.ts`), recherche du dossier des ADR, écriture atomique, sauvegardes dans `~/.adr-deck/backups`, surveillance (`workspace.ts`), configuration de dev (`config.ts`) |
-| `apps/web` | Vue 3 : vues (`views/`), diaporama (`components/slideshow/`), frise chronologique (`views/TimelineView.vue`, `components/timeline/`, tri et regroupement dans `lib/timeline.ts`), store de la collection et file d'écriture par fichier (`stores/review.ts`), traductions (`i18n/`), composants shadcn-vue générés (`components/ui/`) |
+| `packages/adr-deck` | Paquet npm : CLI `adr-deck` (`src/cli.ts`, `src/args.ts` : `review` par défaut, `timeline` (même application ouverte sur `/timeline`), `serve` (lecture seule, `0.0.0.0`), `add`, `export`, `import`, `validate [--strict]` ; questions de `add` dans `src/add.ts`, testées avec des réponses scriptées), regroupée par esbuild avec les `@adr/*` (`scripts/build.ts`), test du tarball (`scripts/smoke.ts`), installation globale (`scripts/install-global.ts`) |
+| `apps/server` | Hono : API (`app.ts`, option `readOnly` → 403), recherche du dossier des ADR et des dossiers de catégorie, écriture atomique, sauvegardes dans `~/.adr-deck/backups`, surveillance (`workspace.ts`), configuration de dev (`config.ts`, `ADR_READ_ONLY=1`) |
+| `apps/web` | Vue 3 : vues (`views/`), diaporama (`components/slideshow/`, dont `LifecycleDialog.vue` remplacer / rendre obsolète), participants (`components/ParticipantsDialog.vue`), frise chronologique (`views/TimelineView.vue`, `components/timeline/`, tri et regroupement dans `lib/timeline.ts`), store de la collection et file d'écriture par fichier (`stores/review.ts`), traductions (`i18n/`), composants shadcn-vue générés (`components/ui/`) |
 | `examples/decisions/` | 15 ADR MADR couvrant tous les statuts — servent aux tests (annulation octet pour octet) et de graine en dev |
-| `templates/madr.md` | Modèle d'ADR MADR |
+| `templates/` | Modèles MADR complet (`madr.md`) et minimal (`madr-minimal.md`) |
+| `docs/` | Guide d'usage en français (`GUIDE.md`) et ses captures (`images/`) |
 | `.claude/skills/adr-extract` | Skill : n'importe quelle source → fichiers MADR validés |
 | `workspace/` | Dossier de développement par défaut, ignoré par git |
 
@@ -39,15 +42,16 @@ Les paquets internes sont consommés en TypeScript source (pas de build) : impor
 
 ## Invariants à préserver
 
-- **Un fichier = une ADR** ; l'ID vient du numéro du fichier (`0007-x.md` → `ADR-0007`). Deux fichiers au même numéro : le second est en erreur.
-- **Édition ciblée** : une décision ne touche que `status` / `date` / `next-review` du front matter et la phrase de tête de « Decision Outcome ». Le reste du fichier est conservé à l'octet près (CRLF compris).
-- **Annulation exacte** : `applyUndo(applyDecision(x), snapshotOf(x)) === x` (testé sur chaque exemple). Pas d'historique dans le fichier (MADR pur).
+- **Un fichier = une ADR** ; l'ID vient du numéro du fichier (`0007-x.md` ou `backend/0007-x.md` → `ADR-0007`). Deux fichiers au même numéro, même dans des dossiers différents : le second est en erreur. Le nom d'un fichier (`Adr.file`, nom côté API) est son chemin relatif avec `/`, au plus deux dossiers de catégorie (`isMadrPath`), jamais hors du dossier des ADR.
+- **Édition ciblée** : une opération ne touche que le front matter (`status`, `date`, `next-review`, et `decision-makers` / `consulted` quand il y a des participants), la phrase de tête de « Decision Outcome » (décider) et « More Information » (`### Actions` d'un retravail, note datée d'un remplacement ou d'une obsolescence). Remplacer ou rendre obsolète **garde la phrase de décision et la date**. Le reste du fichier est conservé à l'octet près (CRLF compris).
+- **Annulation exacte** : `applyUndo(op(x), snapshotOf(x)) === x` pour `decide` et `rework` (testé sur chaque exemple) ; un remplacement modifie deux fichiers en une seule étape d'annulation. Pas d'historique dans le fichier (MADR pur).
 - **Statuts écrits en vocabulaire MADR** (`proposed`, `accepted`, `rejected`, `deferred`, `superseded by ADR-xxxx`, `deprecated`) ; statuts affichés en français (`STATUSES`). La phrase de décision suit la langue des titres du fichier. Ajouter un synonyme = `vocabulary.ts`.
 - **Date de décision** posée automatiquement en Europe/Paris ; ne jamais inventer de date.
 - **Valider exige au moins une option** (contrôlé dans `applyDecision` et dans l'interface).
-- **Aucune base de données** ; le serveur refuse d'écrire un contenu en erreur (422) et vérifie la révision par fichier (`If-Match`, 409). Rien n'est écrit dans le dossier des ADR hors des fichiers eux-mêmes (sauvegardes dans `~/.adr-deck`, export `.docx` téléchargé).
+- **Aucune base de données** ; le serveur refuse d'écrire un contenu en erreur (422), vérifie la révision par fichier (`If-Match`, 409) et refuse toute écriture en lecture seule (403, `serve`). Rien n'est écrit dans le dossier des ADR hors des fichiers eux-mêmes (sauvegardes dans `~/.adr-deck`, export `.docx` téléchargé).
 - **Aller-retour `.docx`** : `importDocx(exportDocx(adrs))` redonne les mêmes ADR (test sur chaque exemple, en/fr/es). Tout champ ajouté au modèle `Adr` doit être exporté **et** relu. Les fichiers écrits restent du MADR canonique (titres et métadonnées du modèle MADR) : la conformité MADR prime.
-- Les modifications de l'interface passent par des `DocumentOperation` rejouables (`decide`, `undo`) appliquées au texte du fichier, pour que le rejeu après conflit ou rechargement fonctionne.
+- Les modifications de l'interface passent par des `DocumentOperation` rejouables (`decide`, `rework`, `supersedes`, `undo`) appliquées au texte du fichier, pour que le rejeu après conflit ou rechargement fonctionne.
+- `validate --strict` n'exige que ce que tous les modèles MADR ont (contexte, phrase de décision une fois décidée) plus `### Confirmation` pour une ADR acceptée et les règles markdownlint de MADR : un fichier minimal passe, les exemples aussi (`npm run validate:example`).
 
 ## Conventions de code
 
@@ -74,7 +78,10 @@ Sobre et centrée sur la diapositive : fond quasi noir par défaut, gris neutres
 - Sur macOS, `process.cwd()` renvoie le chemin réel (`/private/var/…`) alors que `tmpdir()` donne `/var/…` : ne pas comparer ces chemins tels quels dans les tests.
 - `adr-deck` installé globalement via nvm n'existe que pour la version de Node active lors de l'installation.
 - Le flux SSE `/api/events` garde des connexions ouvertes : l'arrêt du serveur appelle `closeAllConnections()`, sinon `close()` ne rend jamais la main.
-- Les tests Playwright fixent `locale: 'fr-FR'` (les parcours vérifient des textes français) ; pour tester une autre langue, `test.use({ locale })`.
+- Les tests Playwright fixent `locale: 'fr-FR'` (les parcours vérifient des textes français) ; pour tester une autre langue, `test.use({ locale })`. Les scénarios de `review.spec.ts` sont en série et s'enchaînent sur le même dossier (ADR-0004 reportée par l'un, retravaillée par le suivant).
+- Les items `CommandItem` doivent être dans un `CommandGroup`, sinon l'injection de contexte échoue.
+- Un `ToggleGroupItem` est exposé comme `button` (pas `radio`) dans les sélecteurs Playwright.
+- Les participants vivent dans `sessionStorage` (par onglet et par dossier) : ils survivent à un rechargement, pas à une nouvelle séance.
 - Ne pas imbriquer `TooltipTrigger` et `DropdownMenuTrigger` : le menu se positionne hors de l'écran.
 
 ## Git

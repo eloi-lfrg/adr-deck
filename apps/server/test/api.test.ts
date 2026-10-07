@@ -171,3 +171,62 @@ describe('watcher', () => {
     await expect.poll(() => events.some((event) => event.type === 'files'), { timeout: 2000 }).toBe(true);
   });
 });
+
+describe('category folders', () => {
+  const NESTED = 'backend/0042-queue.md';
+  const nested = '---\nstatus: proposed\n---\n\n# Queue\n\n## Considered Options\n\n* A\n* B\n';
+
+  beforeEach(async () => {
+    await mkdir(join(dir, 'backend'), { recursive: true });
+    await writeFile(join(dir, NESTED), nested, 'utf8');
+    await mkdir(join(dir, 'node_modules/x'), { recursive: true });
+    await writeFile(join(dir, 'node_modules/x/0001-ignored.md'), '# Ignored\n', 'utf8');
+  });
+
+  it('lists the files of category folders, dependency folders excluded', async () => {
+    const names = (await workspace.listNames()).filter((name) => name.includes('/'));
+    expect(names).toEqual([NESTED]);
+  });
+
+  it('reads and writes a nested file atomically, with its backup', async () => {
+    const read = await app.request(`/api/adrs/${NESTED}`);
+    expect(read.status).toBe(200);
+    const { content, revision } = (await read.json()) as FileResponse;
+    const next = applyDecision(content, NESTED, { status: 'validée', retained: ['P1'], comment: null, nextReview: null, replacedBy: null }, new Date());
+    const write = await app.request(`/api/adrs/${NESTED}`, { method: 'PUT', headers: { 'If-Match': revision }, body: next });
+    expect(write.status).toBe(200);
+    expect(await readFile(join(dir, NESTED), 'utf8')).toBe(next);
+    expect(await readdir(join(dir, 'backend'))).toEqual(['0042-queue.md']);
+    expect((await readdir(backups)).some((file) => file.startsWith('backend__0042-queue.'))).toBe(true);
+  });
+
+  it('rejects hidden, too deep or escaping folders', async () => {
+    expect((await app.request('/api/adrs/.git/0001-a.md')).status).toBe(400);
+    expect((await app.request('/api/adrs/a/b/c/0001-a.md')).status).toBe(400);
+    expect((await app.request('/api/adrs/backend%2F..%2F..%2F0001-a.md')).status).toBe(400);
+  });
+
+  it('finds docs/decisions from the project root when it only holds category folders', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'adr-root-'));
+    try {
+      await mkdir(join(root, 'docs/decisions/backend'), { recursive: true });
+      await writeFile(join(root, 'docs/decisions/backend/0001-a.md'), '# A\n');
+      expect(await resolveDecisionsDir(root)).toBe(join(root, 'docs/decisions'));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('read-only server', () => {
+  it('serves the files and refuses every write', async () => {
+    const readOnly = createApp({ workspace, title: 'Projet', readOnly: true });
+    const list = (await (await readOnly.request('/api/adrs')).json()) as { readOnly: boolean };
+    expect(list.readOnly).toBe(true);
+    const { content, revision } = await getFile();
+    const response = await readOnly.request(`/api/adrs/${NAME}`, { method: 'PUT', headers: { 'If-Match': revision }, body: decided(content, 'x') });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'readOnly' });
+    expect(await readFile(join(dir, NAME), 'utf8')).toBe(content);
+  });
+});

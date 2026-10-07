@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Adr } from '@adr/format';
+import { categoryOf, type Adr } from '@adr/format';
 import { computed } from 'vue';
 import { Check } from '@lucide/vue';
 import AdrLink from '@/components/AdrLink.vue';
@@ -14,6 +14,7 @@ defineEmits<{ open: []; toggleSelect: []; openAdr: [id: string] }>();
 
 const { m } = useI18n();
 const excerpt = computed(() => plainExcerpt(props.adr.context, 200));
+const category = computed(() => categoryOf(props.adr.file));
 const decided = computed(() => (props.adr.decision?.date ? decisionLabel(props.adr.status, props.adr.decision.date) : null));
 </script>
 
@@ -35,7 +36,7 @@ const decided = computed(() => (props.adr.decision?.date ? decisionLabel(props.a
       @click="$emit('open')"
     />
     <div class="pointer-events-none relative z-10 flex items-center justify-between gap-2">
-      <span class="font-mono text-xs tracking-wide text-muted-foreground">{{ adr.id }}</span>
+      <span class="font-mono text-xs tracking-wide text-muted-foreground">{{ adr.id }}<template v-if="category"> · {{ category }}</template></span>
       <StatusBadge :status="adr.status" size="sm" />
     </div>
     <h3 class="pointer-events-none relative z-10 mt-2.5 font-display text-lg leading-snug font-medium text-balance">{{ adr.title }}</h3>

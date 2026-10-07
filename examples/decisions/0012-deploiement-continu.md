@@ -26,6 +26,10 @@ Les mises en production ont lieu une fois par mois, le jeudi soir. Chaque livrai
 
 Chosen option: "Déploiement continu", because les tests de bout en bout sont désormais assez fiables pour bloquer une livraison défectueuse.
 
+### Confirmation
+
+La revue trimestrielle des incidents vérifie qu'aucune mise en production n'a contourné le pipeline.
+
 ## Pros and Cons of the Options
 
 ### Déploiement continu

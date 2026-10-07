@@ -227,7 +227,11 @@ function adrSection(adr: Adr, labels: Labels): (Paragraph | Table)[] {
     for (const proposition of adr.propositions) {
       children.push(heading(`${proposition.id} · ${proposition.title}`, HeadingLevel.HEADING_3));
       children.push(...markdownParagraphs(proposition.body));
-      children.push(...argumentParagraphs(labels.pros, proposition.pros, labels.colon), ...argumentParagraphs(labels.cons, proposition.cons, labels.colon));
+      children.push(
+        ...argumentParagraphs(labels.pros, proposition.pros, labels.colon),
+        ...argumentParagraphs(labels.neutral, proposition.neutral, labels.colon),
+        ...argumentParagraphs(labels.cons, proposition.cons, labels.colon),
+      );
     }
   }
 

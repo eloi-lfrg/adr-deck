@@ -4,11 +4,13 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useFullscreen, useIdle, useMouse } from '@vueuse/core';
 import { toast } from 'vue-sonner';
-import { ArrowLeft, Keyboard, Maximize, Minimize, PanelRight } from '@lucide/vue';
+import { ArrowLeft, Eye, Keyboard, Maximize, Minimize, PanelRight, Users } from '@lucide/vue';
 import CommandPalette from '@/components/CommandPalette.vue';
 import SaveIndicator from '@/components/SaveIndicator.vue';
+import ParticipantsDialog from '@/components/ParticipantsDialog.vue';
 import ShortcutsDialog from '@/components/ShortcutsDialog.vue';
 import AdrSlide from '@/components/slideshow/AdrSlide.vue';
+import LifecycleDialog from '@/components/slideshow/LifecycleDialog.vue';
 import SummarySheet from '@/components/slideshow/SummarySheet.vue';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -79,6 +81,9 @@ const justDecided = ref<string | null>(null);
 const summaryOpen = ref(false);
 const paletteOpen = ref(false);
 const helpOpen = ref(false);
+const participantsOpen = ref(false);
+const lifecycleOpen = ref(false);
+const lifecycleMode = ref<'supersede' | 'deprecate'>('supersede');
 const hint = ref<string | null>(null);
 let hintTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -92,6 +97,8 @@ const chromeVisible = computed(
     summaryOpen.value ||
     paletteOpen.value ||
     helpOpen.value ||
+    participantsOpen.value ||
+    lifecycleOpen.value ||
     review.saveState === 'error' ||
     current.value === null,
 );
@@ -107,7 +114,7 @@ function showHint(message: string): void {
 const slideRef = ref<InstanceType<typeof AdrSlide> | null>(null);
 let advanceTimer: ReturnType<typeof setTimeout> | null = null;
 
-const editing = computed(() => current.value !== null && (!isDecided(current.value.status) || editOverrides.has(current.value.id)));
+const editing = computed(() => current.value !== null && !review.readOnly && (!isDecided(current.value.status) || editOverrides.has(current.value.id)));
 /** A proposed ADR starts with the options its « Decision Outcome » already names. */
 const selected = computed(() => (current.value ? (selections.get(current.value.id) ?? (editing.value ? current.value.recommended : [])) : []));
 const progress = computed(() => (slides.value.length === 0 ? 0 : ((index.value + 1) / slides.value.length) * 100));
@@ -181,8 +188,13 @@ function decide(status: Status): void {
     toast.error(m.value.decisionErrors[error.code](error.params));
     return;
   }
-  editOverrides.delete(adr.id);
-  justDecided.value = adr.id;
+  afterDecision(adr.id);
+}
+
+/** Stamp, then the next slide after a short pause (when auto advance is on). */
+function afterDecision(adrId: string): void {
+  editOverrides.delete(adrId);
+  justDecided.value = adrId;
   (document.activeElement as HTMLElement | null)?.blur();
   cancelAdvance();
   if (preferences.autoAdvance) {
@@ -194,9 +206,29 @@ function decide(status: Status): void {
   }
 }
 
+/** Sends the current ADR back for rework with its actions; it stays proposed. */
+function rework(actions: string[]): void {
+  const adr = current.value;
+  if (!adr || !editing.value) return;
+  try {
+    review.rework(adr.id, actions);
+  } catch (error) {
+    if (!(error instanceof DecisionError)) throw error;
+    showHint(m.value.decisionErrors[error.code](error.params));
+    return;
+  }
+  afterDecision(adr.id);
+}
+
+function openLifecycle(mode: 'supersede' | 'deprecate'): void {
+  cancelAdvance();
+  lifecycleMode.value = mode;
+  lifecycleOpen.value = true;
+}
+
 function modify(): void {
   const adr = current.value;
-  if (!adr || editing.value) return;
+  if (!adr || editing.value || review.readOnly) return;
   cancelAdvance();
   editOverrides.add(adr.id);
   selections.set(adr.id, [...(adr.decision?.retained ?? [])]);
@@ -251,7 +283,7 @@ useShortcuts((event) => {
     paletteOpen.value = !paletteOpen.value;
     return true;
   }
-  if (paletteOpen.value || helpOpen.value) return false;
+  if (paletteOpen.value || helpOpen.value || participantsOpen.value || lifecycleOpen.value) return false;
   if (summaryOpen.value) {
     if (key.toLowerCase() === 's' && !mod) {
       summaryOpen.value = false;
@@ -288,6 +320,10 @@ useShortcuts((event) => {
         break;
       case 'p':
         decide('reportée');
+        break;
+      case 'w':
+        if (!editing.value) return false;
+        slideRef.value?.startRework();
         break;
       case 'm':
         modify();
@@ -343,6 +379,10 @@ onBeforeUnmount(() => {
       </span>
       <div class="flex-1" />
       <SaveIndicator v-if="review.saveState === 'error' || review.saveState === 'saving'" />
+      <span v-if="review.readOnly" class="inline-flex items-center gap-1.5 text-xs text-muted-foreground" :title="m.readOnly.tooltip"><Eye class="size-3.5" /> {{ m.readOnly.badge }}</span>
+      <Button v-else variant="ghost" size="sm" class="text-muted-foreground" @click="participantsOpen = true">
+        <Users /> {{ m.participants.button(review.participants.length) }}
+      </Button>
       <label class="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
         {{ m.slideshow.autoAdvance }}
         <Switch v-model="preferences.autoAdvance" :aria-label="m.slideshow.autoAdvanceLabel" />
@@ -395,8 +435,10 @@ onBeforeUnmount(() => {
             :hint="hint"
             @toggle="toggle"
             @decide="decide"
+            @rework="rework"
             @modify="modify"
             @go="goToAdr"
+            @lifecycle="openLifecycle"
           />
         </Transition>
       </div>
@@ -409,10 +451,14 @@ onBeforeUnmount(() => {
 
     <SummarySheet v-model:open="summaryOpen" :adrs="slides" :current-index="index" @go="go" />
     <ShortcutsDialog v-model:open="helpOpen" />
+    <ParticipantsDialog v-model:open="participantsOpen" />
+    <LifecycleDialog v-if="current" v-model:open="lifecycleOpen" :adr="current" :mode="lifecycleMode" />
     <CommandPalette
       v-model:open="paletteOpen"
       @select-adr="goToAdr"
       @launch="router.push({ query: { mode: 'pending' } })"
+      participants
+      @participants="participantsOpen = true"
     />
   </div>
 </template>

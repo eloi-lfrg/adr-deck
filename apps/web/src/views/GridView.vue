@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { STATUSES, type Adr, type Status } from '@adr/format';
+import { categoryOf, STATUSES, type Adr, type Status } from '@adr/format';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { motion } from 'motion-v';
 import { toast } from 'vue-sonner';
-import { FileDown, GitCommitVertical, Play, Search, X } from '@lucide/vue';
+import { FileDown, Folder, GitCommitVertical, Play, Search, Users, X } from '@lucide/vue';
 import AdrCard from '@/components/AdrCard.vue';
 import CommandPalette from '@/components/CommandPalette.vue';
 import FileHeader from '@/components/FileHeader.vue';
 import FileIssuesNotice from '@/components/FileIssuesNotice.vue';
+import ParticipantsDialog from '@/components/ParticipantsDialog.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -36,6 +37,9 @@ const { duration } = useMotionPreset();
 const statusFilter = ref<Status | 'all'>('all');
 const search = ref('');
 const tags = ref<string[]>([]);
+/** Category folder (`backend`), or every folder. */
+const category = ref<string>('all');
+const participantsOpen = ref(false);
 const sort = ref<SortKey>('file');
 const selection = ref<string[]>([]);
 const mode = ref<ReviewMode>('pending');
@@ -50,8 +54,14 @@ function normalize(text: string): string {
 
 function haystack(adr: Adr): string {
   return normalize(
-    [adr.id, adr.title, adr.tags.join(' '), adr.context, adr.decision?.comment ?? '', ...adr.propositions.flatMap((p) => [p.title, p.body, ...p.pros, ...p.cons])].join(' '),
+    [adr.id, adr.file, adr.title, adr.tags.join(' '), adr.context, adr.decision?.comment ?? '', ...adr.propositions.flatMap((p) => [p.title, p.body, ...p.pros, ...p.cons])].join(' '),
   );
+}
+
+function inCategory(adr: Adr): boolean {
+  if (category.value === 'all') return true;
+  const folder = categoryOf(adr.file);
+  return folder !== null && (folder === category.value || folder.startsWith(`${category.value}/`));
 }
 
 const visible = computed<Adr[]>(() => {
@@ -60,6 +70,7 @@ const visible = computed<Adr[]>(() => {
     (adr) =>
       (statusFilter.value === 'all' || adr.status === statusFilter.value) &&
       tags.value.every((tag) => adr.tags.includes(tag)) &&
+      inCategory(adr) &&
       terms.every((term) => haystack(adr).includes(term)),
   );
   if (sort.value === 'status') return [...list].sort((a, b) => STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status));
@@ -130,6 +141,7 @@ function clearFilters(): void {
   statusFilter.value = 'all';
   search.value = '';
   tags.value = [];
+  category.value = 'all';
 }
 
 useShortcuts((event) => {
@@ -203,6 +215,9 @@ onMounted(() => {
               <GitCommitVertical /> {{ m.grid.timeline }}
             </Button>
             <Button variant="ghost" size="icon" class="text-muted-foreground" :aria-label="m.grid.export" :title="m.grid.export" @click="exportDocx"><FileDown /></Button>
+            <Button v-if="!review.readOnly" variant="ghost" size="sm" class="text-muted-foreground" :title="m.participants.description" @click="participantsOpen = true">
+              <Users /> {{ m.participants.button(review.participants.length) }}
+            </Button>
             <Button @click="launchReview">
               <Play /> {{ m.grid.launch }}
               <span class="text-primary-foreground/70 tabular-nums">{{ launchCount }}</span>
@@ -238,6 +253,21 @@ onMounted(() => {
           <Search class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input ref="searchInput" v-model="search" type="search" :placeholder="m.grid.search" class="border-transparent bg-secondary/60 pl-9 shadow-none" :aria-label="m.grid.searchLabel" />
         </div>
+        <ToggleGroup
+          v-if="review.categories.length > 0"
+          :model-value="category"
+          type="single"
+          size="sm"
+          :spacing="1"
+          class="flex-wrap"
+          :aria-label="m.grid.categoryFilter"
+          @update:model-value="(value) => (category = typeof value === 'string' && value !== '' ? value : 'all')"
+        >
+          <ToggleGroupItem value="all" class="rounded-md px-2 text-xs text-muted-foreground data-[state=on]:bg-secondary data-[state=on]:text-foreground">{{ m.grid.allCategories }}</ToggleGroupItem>
+          <ToggleGroupItem v-for="folder in review.categories" :key="folder" :value="folder" class="rounded-md px-2 font-mono text-xs text-muted-foreground data-[state=on]:bg-secondary data-[state=on]:text-foreground">
+            <Folder class="size-3.5" /> {{ folder }}
+          </ToggleGroupItem>
+        </ToggleGroup>
         <ToggleGroup v-if="review.allTags.length > 0" v-model="tags" type="multiple" size="sm" :spacing="1" class="flex-wrap" :aria-label="m.grid.tagsFilter">
           <ToggleGroupItem v-for="tag in review.allTags" :key="tag" :value="tag" class="rounded-md px-2 text-xs text-muted-foreground data-[state=on]:bg-secondary data-[state=on]:text-foreground">{{ tag }}</ToggleGroupItem>
         </ToggleGroup>
@@ -290,10 +320,13 @@ onMounted(() => {
       </div>
     </main>
 
+    <ParticipantsDialog v-model:open="participantsOpen" />
     <CommandPalette
       v-model:open="paletteOpen"
       @select-adr="(id) => launch({ mode: 'all', at: id })"
       @launch="launchReview"
+      participants
+      @participants="participantsOpen = true"
     />
   </div>
 </template>

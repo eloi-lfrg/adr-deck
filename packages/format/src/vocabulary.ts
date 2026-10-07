@@ -50,6 +50,35 @@ export function sectionOf(heading: string): { kind: SectionKind; language: Langu
 /** Heading written when a « Decision Outcome » section has to be created. */
 export const OUTCOME_HEADING: Record<Language, string> = { en: 'Decision Outcome', fr: 'Décision' };
 
+/** Heading written when a « More Information » section has to be created. */
+export const MORE_INFO_HEADING: Record<Language, string> = { en: 'More Information', fr: 'Informations complémentaires' };
+
+export type OutcomeSubsectionKind = 'consequences' | 'confirmation';
+
+/** `###` subsections of « Decision Outcome » the app shows on their own. */
+const OUTCOME_SUBSECTIONS: Record<string, OutcomeSubsectionKind> = {
+  consequences: 'consequences',
+  consequence: 'consequences',
+  'positive consequences': 'consequences',
+  'negative consequences': 'consequences',
+  confirmation: 'confirmation',
+  verification: 'confirmation',
+};
+
+export function outcomeSubsectionOf(heading: string): OutcomeSubsectionKind | null {
+  return OUTCOME_SUBSECTIONS[normalizeKey(heading)] ?? null;
+}
+
+/** `### Actions` subsection of « More Information »: follow-up actions of an ADR sent back for rework. */
+const ACTIONS_HEADINGS = new Set(['actions', 'action items', 'actions a mener', 'next steps']);
+
+export function isActionsHeading(heading: string): boolean {
+  return ACTIONS_HEADINGS.has(normalizeKey(heading));
+}
+
+/** Heading written when the `### Actions` subsection has to be created (same word in both languages). */
+export const ACTIONS_HEADING = 'Actions';
+
 const STATUS_WORDS: Record<string, Status> = {
   proposed: 'à décider',
   draft: 'à décider',
@@ -129,3 +158,5 @@ export function statusValue(status: Status, replacedBy: string | null): string {
 /** `* Good, because …` / `* Bad, because …` bullets of an option (also `Bon, car …`, `Avantage : …`). */
 export const PRO_BULLET = /^[-*+]\s+(?:good|pro|bon|pour|avantage)\s*[,:]\s*(?:because\s+|car\s+|parce que\s+)?(.+)$/iu;
 export const CON_BULLET = /^[-*+]\s+(?:bad|con|mauvais|contre|inconvenient|inconvénient)\s*[,:]\s*(?:because\s+|car\s+|parce que\s+)?(.+)$/iu;
+/** `* Neutral, because …` bullets (MADR 4), also `Neutre, car …`. */
+export const NEUTRAL_BULLET = /^[-*+]\s+(?:neutral|neutre)\s*[,:]\s*(?:because\s+|car\s+|parce que\s+)?(.+)$/iu;

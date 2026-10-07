@@ -52,6 +52,7 @@ const groups = computed<{ title: string; items: [string[], string][] }[]>(() => 
         [['V'], k.accept],
         [['X'], k.reject],
         [['P'], k.defer],
+        [['W'], k.rework],
         [['C'], k.comment],
         [['M'], k.modify],
         [['Ctrl', 'Z'], k.undo],

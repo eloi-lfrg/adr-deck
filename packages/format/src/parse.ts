@@ -3,7 +3,7 @@ import { adrIdFromFileName } from './files.ts';
 import { issueMessage, makeIssue } from './issues.ts';
 import { analyze, leadRange, textOf, type Layout, type Section } from './layout.ts';
 import { DATE_PATTERN, type Adr, type Decision, type Language, type ParseIssue, type ParseResult, type Proposition } from './schema.ts';
-import { CON_BULLET, normalizeKey, PRO_BULLET, readStatus, sectionOf, type SectionKind } from './vocabulary.ts';
+import { CON_BULLET, NEUTRAL_BULLET, normalizeKey, PRO_BULLET, readStatus, sectionOf, type SectionKind } from './vocabulary.ts';
 
 type FrontmatterValues = Map<string, unknown>;
 
@@ -104,26 +104,28 @@ function optionsFrom(layout: Layout, section: Section | undefined): Proposition[
       if (title !== '') titles.push(title);
     }
   }
-  return titles.map((title, index) => ({ id: `P${index + 1}`, title, body: '', pros: [], cons: [] }));
+  return titles.map((title, index) => ({ id: `P${index + 1}`, title, body: '', pros: [], cons: [], neutral: [] }));
 }
 
 /** Fills option bodies and Good/Bad arguments from the « Pros and Cons of the Options » subsections. */
 function addProsAndCons(layout: Layout, section: Section | undefined, propositions: Proposition[]): Proposition[] {
   if (!section) return propositions;
-  const result = propositions.map((proposition) => ({ ...proposition, pros: [...proposition.pros], cons: [...proposition.cons] }));
+  const result = propositions.map((proposition) => ({ ...proposition, pros: [...proposition.pros], cons: [...proposition.cons], neutral: [...proposition.neutral] }));
   for (const subsection of section.subsections) {
     const title = cleanTitle(subsection.heading);
     let proposition = findProposition(result, title);
     if (!proposition) {
-      proposition = { id: `P${result.length + 1}`, title, body: '', pros: [], cons: [] };
+      proposition = { id: `P${result.length + 1}`, title, body: '', pros: [], cons: [], neutral: [] };
       result.push(proposition);
     }
     const body: string[] = [];
     for (const line of layout.lines.slice(subsection.line + 1, subsection.end)) {
       const pro = PRO_BULLET.exec(line);
       const con = CON_BULLET.exec(line);
+      const neutral = NEUTRAL_BULLET.exec(line);
       if (pro) proposition.pros.push(pro[1]!.trim());
       else if (con) proposition.cons.push(con[1]!.trim());
+      else if (neutral) proposition.neutral.push(neutral[1]!.trim());
       else body.push(line);
     }
     proposition.body = textOf(body, 0, body.length);
@@ -229,7 +231,8 @@ export function parseMadr(content: string, fileName: string): ParseResult {
       ? null
       : {
           status: reading.status,
-          retained: reading.status === 'validée' ? outcome.chosen : [],
+          // A superseded or deprecated ADR keeps the options it had chosen (its outcome sentence is left as decided).
+          retained: reading.status === 'validée' || reading.status === 'remplacée' || reading.status === 'obsolète' ? outcome.chosen : [],
           date,
           nextReview: reading.status === 'reportée' && nextReviewValue !== null && DATE_PATTERN.test(nextReviewValue) ? nextReviewValue : null,
           replacedBy: reading.replacedBy,

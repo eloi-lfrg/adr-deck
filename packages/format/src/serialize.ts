@@ -1,6 +1,7 @@
 import { outcomeSentence } from './operations.ts';
 import type { Adr, Language, Status } from './schema.ts';
 import { statusValue } from './vocabulary.ts';
+import { yamlScalar } from './yaml.ts';
 
 /** Everything needed to write a MADR file from scratch (e.g. when importing a .docx). */
 export interface MadrDraft {
@@ -17,7 +18,7 @@ export interface MadrDraft {
   otherMetadata: [string, string][];
   context: string;
   drivers: string;
-  propositions: { title: string; body: string; pros: string[]; cons: string[] }[];
+  propositions: { title: string; body: string; pros: string[]; cons: string[]; neutral: string[] }[];
   /** Indexes (0-based) of the chosen options — or the recommended ones for a proposed ADR. */
   chosen: number[];
   comment: string | null;
@@ -46,15 +47,10 @@ const HEADINGS: Record<Language, Record<'context' | 'drivers' | 'options' | 'out
   },
 };
 
-const ARGUMENTS: Record<Language, { pro: string; con: string }> = {
-  en: { pro: 'Good, because', con: 'Bad, because' },
-  fr: { pro: 'Bon, car', con: 'Mauvais, car' },
+const ARGUMENTS: Record<Language, { pro: string; con: string; neutral: string }> = {
+  en: { pro: 'Good, because', con: 'Bad, because', neutral: 'Neutral, because' },
+  fr: { pro: 'Bon, car', con: 'Mauvais, car', neutral: 'Neutre, car' },
 };
-
-/** YAML scalar, quoted only when needed. */
-function yamlScalar(value: string): string {
-  return /^[\p{L}\p{N}][\p{L}\p{N} .'()&/+-]*$/u.test(value) && !/^(?:true|false|null|yes|no|on|off|~)$/iu.test(value) ? value : JSON.stringify(value);
-}
 
 /** A kept front matter entry: the inline value on the key line, then its continuation lines as they were. */
 function metadataLines(key: string, value: string): string[] {
@@ -98,13 +94,20 @@ export function serializeMadr(draft: MadrDraft): string {
   const lead = outcomeLead(draft);
   if (lead !== '' || draft.outcomeDetails.trim() !== '') section(headings.outcome, [lead, draft.outcomeDetails.trim()].filter(Boolean).join('\n\n'));
 
-  const detailed = draft.propositions.filter((proposition) => proposition.body.trim() !== '' || proposition.pros.length > 0 || proposition.cons.length > 0);
+  const detailed = draft.propositions.filter(
+    (proposition) => proposition.body.trim() !== '' || proposition.pros.length > 0 || proposition.cons.length > 0 || proposition.neutral.length > 0,
+  );
   if (detailed.length > 0) {
-    const { pro, con } = ARGUMENTS[draft.language];
+    const { pro, con, neutral } = ARGUMENTS[draft.language];
     const subsections = detailed.map((proposition) => {
       const parts = [`### ${proposition.title}`];
       if (proposition.body.trim() !== '') parts.push(proposition.body.trim());
-      const bullets = [...proposition.pros.map((text) => `* ${pro} ${text}`), ...proposition.cons.map((text) => `* ${con} ${text}`)];
+      // MADR template order: Good, Neutral, Bad.
+      const bullets = [
+        ...proposition.pros.map((text) => `* ${pro} ${text}`),
+        ...proposition.neutral.map((text) => `* ${neutral} ${text}`),
+        ...proposition.cons.map((text) => `* ${con} ${text}`),
+      ];
       if (bullets.length > 0) parts.push(bullets.join('\n'));
       return parts.join('\n\n');
     });
@@ -132,7 +135,7 @@ export function draftFromAdr(adr: Adr): MadrDraft {
     otherMetadata: adr.otherMetadata,
     context: adr.context,
     drivers: adr.drivers,
-    propositions: adr.propositions.map(({ title, body, pros, cons }) => ({ title, body, pros, cons })),
+    propositions: adr.propositions.map(({ title, body, pros, cons, neutral }) => ({ title, body, pros, cons, neutral })),
     chosen: chosenIds.map((id) => adr.propositions.findIndex((proposition) => proposition.id === id)).filter((index) => index !== -1),
     comment: adr.decision?.comment ?? adr.rationale,
     outcomeDetails: adr.outcomeDetails,

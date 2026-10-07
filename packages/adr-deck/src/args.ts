@@ -4,6 +4,8 @@ import { EXPORT_LANGUAGES, isExportLanguage, type ExportLanguage } from '@adr/co
 
 export const DEFAULT_PORT = 8787;
 export const DEFAULT_HOST = '127.0.0.1';
+/** `serve` shares the decisions on the local network: every interface by default. */
+export const SERVE_HOST = '0.0.0.0';
 
 export interface ReviewOptions {
   /** Launch directory: MADR files are looked for here, then in docs/decisions, docs/adr… */
@@ -15,16 +17,19 @@ export interface ReviewOptions {
   open: boolean;
   /** Page the browser opens on. */
   view: 'grid' | 'timeline';
+  /** Refuse every write: the decisions can be read and presented, never changed. */
+  readOnly: boolean;
 }
 
 export type Command =
   | { kind: 'review'; options: ReviewOptions }
   | { kind: 'export'; root: string; output: string | null; language: ExportLanguage }
-  | { kind: 'validate'; paths: string[] }
+  /** `strict`: also the MADR template and markdownlint checks; warnings then fail too. */
+  | { kind: 'validate'; paths: string[]; strict: boolean }
   /** `dir`: null = the decisions directory of the current directory (see `cli.ts`). */
   | { kind: 'import'; input: string; dir: string | null; force: boolean }
   /** `dir`: null = the decisions directory of the current directory (see `cli.ts`). */
-  | { kind: 'add'; dir: string | null }
+  | { kind: 'add'; dir: string | null; minimal: boolean; category: string | null }
   | { kind: 'help' }
   | { kind: 'version' };
 
@@ -51,6 +56,10 @@ function parse(argv: string[]) {
         output: { type: 'string', short: 'o' },
         lang: { type: 'string', short: 'l' },
         force: { type: 'boolean', short: 'f' },
+        'read-only': { type: 'boolean' },
+        strict: { type: 'boolean' },
+        minimal: { type: 'boolean' },
+        category: { type: 'string', short: 'c' },
         help: { type: 'boolean', short: 'h' },
         version: { type: 'boolean', short: 'v' },
       },
@@ -84,13 +93,18 @@ export function parseCommand(argv: string[], env: NodeJS.ProcessEnv, cwd: string
   if (subcommand === 'add') {
     if (rest.length > 1) throw new ArgsError(`Expected at most one directory, got: ${rest.join(' ')}`);
     const dir = rest[0] ?? values.dir;
-    return { kind: 'add', dir: dir === undefined ? null : resolve(cwd, dir) };
+    const category = values.category?.trim().replace(/^\/+|\/+$/gu, '') ?? null;
+    if (category !== null && (category.split('/').some((segment) => segment === '' || segment.startsWith('.')) || category.split('/').length > 2)) {
+      throw new ArgsError(`Invalid category folder: ${values.category ?? ''} (at most two levels, no hidden folder)`);
+    }
+    return { kind: 'add', dir: dir === undefined ? null : resolve(cwd, dir), minimal: values.minimal === true, category };
   }
   if (subcommand === 'validate') {
-    return { kind: 'validate', paths: (rest.length > 0 ? rest : [values.dir ?? '.']).map((path) => resolve(cwd, path)) };
+    return { kind: 'validate', paths: (rest.length > 0 ? rest : [values.dir ?? '.']).map((path) => resolve(cwd, path)), strict: values.strict === true };
   }
-  // `review` is the default command; `timeline` is the same app, opened on the timeline.
-  if (subcommand !== undefined && subcommand !== 'review' && subcommand !== 'timeline') throw new ArgsError(`Unknown command: ${subcommand}`);
+  // `review` is the default command; `timeline` is the same app, opened on the timeline; `serve` shares it read-only.
+  if (subcommand !== undefined && subcommand !== 'review' && subcommand !== 'timeline' && subcommand !== 'serve') throw new ArgsError(`Unknown command: ${subcommand}`);
+  const serving = subcommand === 'serve';
   const dirs = rest;
   if (dirs.length > 1) throw new ArgsError(`Expected a single directory, got: ${dirs.join(' ')}`);
 
@@ -102,9 +116,11 @@ export function parseCommand(argv: string[], env: NodeJS.ProcessEnv, cwd: string
       root: resolve(cwd, dirs[0] ?? values.dir ?? '.'),
       port: fromFlag ?? fromEnv ?? DEFAULT_PORT,
       portExplicit: fromFlag !== null || fromEnv !== null,
-      host: values.host ?? (env['ADR_HOST'] || DEFAULT_HOST),
-      open: values.open !== false,
-      view: subcommand === 'timeline' ? 'timeline' : 'grid',
+      host: values.host ?? (env['ADR_HOST'] || (serving ? SERVE_HOST : DEFAULT_HOST)),
+      // `serve` runs on a machine others connect to: the browser only opens on request (`--open`).
+      open: serving ? argv.includes('--open') : values.open !== false,
+      view: subcommand === 'timeline' || serving ? 'timeline' : 'grid',
+      readOnly: serving || values['read-only'] === true,
     },
   };
 }
